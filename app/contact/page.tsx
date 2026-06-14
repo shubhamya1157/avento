@@ -1,3 +1,19 @@
+// ===========================================================================
+// contact/page.tsx — The "/contact" page: contact info, a form, and FAQs
+// ===========================================================================
+//
+// This page lets a visitor send a message and read frequently asked questions.
+// It's interactive, so it needs state:
+//   - formState: holds every field of the contact form in one object.
+//   - isSubmitting / submitted: control the button spinner and the thank-you
+//     screen after sending.
+//   - openFaq: which FAQ item is currently expanded (an accordion).
+//
+// NOTE: the form doesn't really email anyone yet — handleSubmit just waits 1.5s
+// to mimic a network request, then shows the success screen. Wiring it to a
+// real backend would be the next step.
+// ===========================================================================
+
 "use client";
 
 import { useState } from "react";
@@ -17,6 +33,8 @@ import {
 } from "lucide-react";
 
 export default function ContactPage() {
+  // All five form fields live together in one state object. To update just one,
+  // we spread the old object and overwrite that single key (see the inputs).
   const [formState, setFormState] = useState({
     name: "",
     email: "",
@@ -24,10 +42,13 @@ export default function ContactPage() {
     subject: "",
     message: "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // true while "sending"
+  const [submitted, setSubmitted] = useState(false);       // true once sent
+  // Which FAQ is open. `number | null`: an index, or null when all are closed.
+  // It starts at 0, so the first question is open by default.
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
+  // The FAQ content, kept as an array so we can loop over it to draw the list.
   const faqs = [
     {
       question: "How quickly will Avento respond?",
@@ -52,8 +73,11 @@ export default function ContactPage() {
     },
   ];
 
+  // Handle the form submission. Right now it FAKES a server call: it shows the
+  // spinner, waits 1.5 seconds, then switches to the success screen.
+  //   new Promise + setTimeout = "pause here for 1500 milliseconds".
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault(); // stop the browser's default page reload on submit
     setIsSubmitting(true);
     // Simulate api submission
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -197,7 +221,8 @@ export default function ContactPage() {
             </div>
           </div>
 
-          {/* Send Message Form Section */}
+          {/* Send Message Form Section. We show the FORM until `submitted` is
+              true, then swap it for a thank-you message (the ternary below). */}
           <div className="mt-16 max-w-4xl mx-auto">
             <div className="rounded-3xl border border-white/5 bg-zinc-900/25 p-8 md:p-12 backdrop-blur-md relative">
               {!submitted ? (
@@ -214,6 +239,10 @@ export default function ContactPage() {
                         <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
                           Full Name
                         </label>
+                        {/* Each input updates ONE key of formState. The trick
+                            { ...formState, name: e.target.value } means: copy
+                            every existing field, then overwrite just `name`. The
+                            other four inputs follow the same pattern. */}
                         <input
                           type="text"
                           required
@@ -364,6 +393,8 @@ export default function ContactPage() {
               </h2>
             </div>
 
+            {/* The FAQ accordion: loop over `faqs` and draw one expandable row
+                each. A row is "open" when its index matches `openFaq`. */}
             <div className="space-y-4">
               {faqs.map((faq, index) => {
                 const isOpen = openFaq === index;
@@ -372,6 +403,8 @@ export default function ContactPage() {
                     key={index}
                     className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-md transition-colors"
                   >
+                    {/* Click toggles this row: if it's already open, close it
+                        (null); otherwise open this one (its index). */}
                     <button
                       onClick={() => setOpenFaq(isOpen ? null : index)}
                       className="flex w-full items-center justify-between p-5 text-left text-sm font-bold text-white outline-none"

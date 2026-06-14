@@ -1,3 +1,18 @@
+// ===========================================================================
+// about/page.tsx — The "/about" page
+// ===========================================================================
+//
+// This whole page is presentational: it just displays text and images, with no
+// data fetching and almost no interactivity. It's built from five small
+// section components defined right here in the file (AboutHero, WhyAvento,
+// StatsSection, VisionSection, AboutCTA), then stacked together at the bottom
+// in the exported AboutPage.
+//
+// Defining each section as its own little function keeps the markup organised
+// and easy to scan. The bulk of each section is Tailwind CSS classes (inside
+// className="...") that handle layout, colours, spacing, and animations.
+// ===========================================================================
+
 import Link from "next/link";
 import {
   Sparkles,
@@ -10,7 +25,7 @@ import {
 import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
 
-// Section 1: AboutHero
+// Section 1: AboutHero — the big intro banner with the headline and a photo.
 function AboutHero() {
   return (
     <section className="relative flex items-center overflow-hidden bg-black pt-36 pb-20">
@@ -95,7 +110,8 @@ function AboutHero() {
   );
 }
 
-// Section 2: WhyAvento
+// Section 2: WhyAvento — four benefit cards. The card contents live in an
+// array, and we loop over it to draw the cards (instead of repeating markup).
 function WhyAvento() {
   const cards = [
     {
@@ -153,9 +169,12 @@ function WhyAvento() {
           </p>
         </div>
 
-        {/* Benefits Grid */}
+        {/* Benefits Grid — one card per item in the `cards` array above. */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {cards.map((card, i) => {
+            // Pull the icon component out of the data so we can render it as a
+            // tag below. (A capitalised name like `Icon` is required for JSX to
+            // treat it as a component rather than a plain HTML tag.)
             const Icon = card.icon;
             return (
               <div
@@ -201,7 +220,8 @@ function WhyAvento() {
   );
 }
 
-// Section 3: StatsSection
+// Section 3: StatsSection — four big headline numbers (10K+ rides, etc.),
+// again driven by an array and a loop.
 function StatsSection() {
   const stats = [
     {
@@ -270,7 +290,7 @@ function StatsSection() {
   );
 }
 
-// Section 4: VisionSection
+// Section 4: VisionSection — two large image "pillars" (luxury & performance).
 function VisionSection() {
   const pillars = [
     {
@@ -357,7 +377,9 @@ function VisionSection() {
   );
 }
 
-// Section 5: AboutCTA
+// Section 5: AboutCTA — the closing "call to action" with two buttons that
+// send the visitor to the vehicles and contact pages. (CTA = Call To Action:
+// the part that invites the user to take the next step.)
 function AboutCTA() {
   return (
     <section className="bg-black text-white py-28 px-6 md:px-12 lg:px-24 relative overflow-hidden">
@@ -415,6 +437,8 @@ function AboutCTA() {
   );
 }
 
+// The page itself: stack the navigation bar, the five sections in order, and
+// the footer. This is the component Next.js actually renders for "/about".
 export default function AboutPage() {
   return (
     <>

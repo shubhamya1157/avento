@@ -1,3 +1,17 @@
+// ===========================================================================
+// vehicles/page.tsx — The "/vehicles" page: the full fleet grid with filters
+// ===========================================================================
+//
+// This page lists every vehicle as a grid of cards, with filter buttons (All /
+// Cars / Bikes / SUVs) along the top. Clicking a card's "Book Now" opens the
+// booking popup.
+//
+// HOW FILTERING WORKS HERE: we keep TWO lists in state — the full `vehicles`
+// list, and the `filteredVehicles` list that's actually shown. Pressing a
+// filter button rebuilds the filtered list from the full one. (We never lose
+// the full list, so switching back to "All" instantly restores everything.)
+// ===========================================================================
+
 'use client';
 
 import { useState, useEffect } from "react";
@@ -7,18 +21,25 @@ import BookingModal from "@/app/component/BookingModal";
 import type { Vehicle } from "@/app/lib/types";
 import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
 import { motion, AnimatePresence } from "framer-motion";
-import { Car, Zap, Users, Loader2 } from "lucide-react";
+import { Car, Zap, Users } from "lucide-react";
 
+// The filter options. `as const` freezes this array so its values are treated
+// as the exact strings "all" | "car" | "bike" | "suv", not just any string.
 const FILTERS = ["all", "car", "bike", "suv"] as const;
 
 export default function VehiclesPage() {
+  // The complete list (starts with the built-in static list for an instant
+  // render) and the subset currently displayed after filtering.
   const [vehicles, setVehicles] = useState<Vehicle[]>(STATIC_VEHICLES);
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>(STATIC_VEHICLES);
+
+  // Which filter button is active, and the booking-popup state.
   const [activeFilter, setActiveFilter] = useState<string>("all");
-  const [loading, setLoading] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
 
+  // On first load, refresh both lists from the API. If it fails, we keep the
+  // static list that's already showing, so the page is never blank.
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
@@ -30,13 +51,13 @@ export default function VehiclesPage() {
         }
       } catch (err) {
         console.error("Failed to load vehicles", err);
-      } finally {
-        setLoading(false);
       }
     };
     fetchVehicles();
   }, []);
 
+  // Runs when a filter button is pressed: remember which is active, then rebuild
+  // the visible list — everything for "all", or only the matching type otherwise.
   const handleFilterChange = (filter: string) => {
     setActiveFilter(filter);
     setFilteredVehicles(filter === "all" ? vehicles : vehicles.filter((v) => v.type === filter));
@@ -56,6 +77,9 @@ export default function VehiclesPage() {
             </p>
           </div>
 
+          {/* The filter buttons. We loop over FILTERS to draw one button each.
+              The active button gets a white style; the rest get an outline.
+              The label shows "All Rides", or pluralises the type (e.g. "cars"). */}
           <div className="mt-12 flex flex-wrap justify-center gap-3 md:justify-start">
             {FILTERS.map((filter) => (
               <button
@@ -72,17 +96,19 @@ export default function VehiclesPage() {
             ))}
           </div>
 
-          {loading ? (
-            <div className="flex min-h-[400px] w-full items-center justify-center">
-              <Loader2 size={36} className="animate-spin text-zinc-500" />
-            </div>
-          ) : filteredVehicles.length === 0 ? (
+          {/* If a filter matches no vehicles, show a friendly empty message;
+              otherwise render the grid of vehicle cards. */}
+          {filteredVehicles.length === 0 ? (
             <div className="mt-10 rounded-3xl border border-dashed border-white/10 py-24 text-center">
               <p className="text-sm text-zinc-500">No vehicles found in this category.</p>
             </div>
           ) : (
+            // The responsive grid: 1 column on phones, 2 on tablets, 3 on
+            // desktops (grid-cols-1 / sm:grid-cols-2 / lg:grid-cols-3).
             <motion.div layout className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence mode="popLayout" initial={false}>
+                {/* Draw one card per vehicle. The `layout` prop animates cards
+                    smoothly rearranging when the filter changes. */}
                 {filteredVehicles.map((vehicle) => (
                   <motion.div
                     layout
@@ -93,6 +119,8 @@ export default function VehiclesPage() {
                     transition={{ duration: 0.4 }}
                     className="group flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/30 backdrop-blur-md"
                   >
+                    {/* Card top: the photo, with a price badge and (if the
+                        vehicle is taken) a "Booked Out" overlay. */}
                     <div className="relative h-56 overflow-hidden bg-zinc-800">
                       <img
                         src={vehicle.image}
@@ -100,6 +128,7 @@ export default function VehiclesPage() {
                         style={{ objectPosition: vehicle.imagePosition ?? "center" }}
                         className="h-full w-full object-cover transition-all duration-500 group-hover:scale-105"
                       />
+                      {/* Only shown when the vehicle is NOT available */}
                       {!vehicle.availability && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                           <span className="rounded-full border border-red-500/20 bg-red-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-red-400">
@@ -113,6 +142,7 @@ export default function VehiclesPage() {
                       </div>
                     </div>
 
+                    {/* Card body: name, short description, specs, and button */}
                     <div className="flex flex-1 flex-col space-y-4 p-6">
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
@@ -124,10 +154,12 @@ export default function VehiclesPage() {
                         </h3>
                       </div>
 
+                      {/* line-clamp-2 cuts the description to 2 lines max */}
                       <p className="line-clamp-2 text-xs leading-relaxed text-zinc-400">
                         {vehicle.description}
                       </p>
 
+                      {/* The three quick specs: transmission, fuel, seats */}
                       <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4 text-[11px] text-zinc-400">
                         <span className="flex items-center gap-1">
                           <Car size={12} className="shrink-0" />
@@ -143,6 +175,8 @@ export default function VehiclesPage() {
                         </span>
                       </div>
 
+                      {/* Book button: disabled (greyed out) when unavailable.
+                          Clicking it remembers this vehicle and opens the popup. */}
                       <div className="pt-2">
                         <button
                           disabled={!vehicle.availability}
@@ -164,6 +198,7 @@ export default function VehiclesPage() {
         </div>
       </main>
 
+      {/* The booking popup, opened by the card buttons above. */}
       <BookingModal
         open={bookingOpen}
         onClose={() => setBookingOpen(false)}

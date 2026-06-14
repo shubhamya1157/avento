@@ -1,2 +1,17 @@
-@import "tailwindcss";
+/* ==========================================================================
+   globals.css — The single stylesheet loaded for the WHOLE app
+   ==========================================================================
 
+   This file is imported once in app/layout.tsx, so its styles apply everywhere.
+
+   The one line below pulls in Tailwind CSS. Tailwind is a "utility-first" CSS
+   framework: instead of writing custom CSS rules here, we style elements by
+   adding small pre-made classes directly in the markup, like
+   className="flex items-center bg-black text-white". That's why almost all the
+   styling in this project lives in the components, and this file stays tiny.
+
+   If you ever need a truly global custom rule (one that can't be expressed with
+   Tailwind classes), you would add it below this import.
+   ========================================================================== */
+
+@import "tailwindcss";

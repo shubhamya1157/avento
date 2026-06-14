@@ -1,9 +1,25 @@
+// ===========================================================================
+// Footer.tsx — The footer shown at the bottom of every page
+// ===========================================================================
+//
+// The footer holds the newsletter sign-up bar, four columns of links (brand,
+// directory, categories, contact), the social icons, and the copyright line.
+// It's almost all presentational (styling + links). A few notes:
+//   - Social icons are drawn as inline <svg> shapes (hand-drawn paths).
+//   - `target="_blank"` opens links in a new tab; `rel="noopener noreferrer"`
+//     is a safety/privacy best-practice that goes with external new-tab links.
+//   - The newsletter form's onSubmit just calls preventDefault() — it stops the
+//     page reload but doesn't send anywhere yet (no backend wired up for it).
+// ===========================================================================
+
 'use client';
 
 import Link from "next/link";
 import { Mail, Phone, MapPin } from "lucide-react";
 
 export default function Footer() {
+  // Compute the current year so the copyright text updates itself every year
+  // instead of being hard-coded.
   const currentYear = new Date().getFullYear();
 
   return (
@@ -12,7 +28,8 @@ export default function Footer() {
       <div className="absolute -bottom-24 left-1/3 h-[300px] w-[600px] rounded-full bg-white/[0.02] blur-[120px] pointer-events-none" />
       <div className="absolute -top-24 -left-24 h-[300px] w-[300px] rounded-full bg-white/[0.01] blur-[120px] pointer-events-none" />
 
-      {/* Top Horizontal Newsletter CTA Banner */}
+      {/* Top Horizontal Newsletter CTA Banner — a "subscribe with your email"
+          strip. The form is decorative for now (see note at top of file). */}
       <div className="mx-auto max-w-7xl border-b border-white/5 pb-12 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
         <div className="max-w-md space-y-2 text-center md:text-left">
           <h3 className="font-bold text-white text-lg tracking-tight">SUBSCRIBE TO AVENTO ELITE</h3>

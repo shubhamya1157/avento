@@ -1,5 +1,24 @@
+// ===========================================================================
+// seed-vehicles.ts — The fixed "starter" list of vehicles
+// ===========================================================================
+//
+// "Seed data" means starting data we hard-code into the app instead of typing
+// it into a database by hand. This file holds the whole fleet as a plain
+// JavaScript array. The app shows these directly, which is instant — there's
+// no database round-trip just to list the cars (see app/api/vehicles/route.ts,
+// which serves this list as-is).
+//
+// This file exports two things:
+//   1. SEED_VEHICLES  — the raw list (without ids), defined just below.
+//   2. STATIC_VEHICLES — the same list with an id and timestamps added, which
+//      is the shape the rest of the app actually uses.
+// ===========================================================================
+
 import type { Vehicle, VehicleType, Transmission, FuelType } from "./types";
 
+// The shape of one entry in our raw seed list. It's like the full `Vehicle`
+// type but WITHOUT the `_id` — because we generate the id ourselves further
+// down rather than typing one out for every car.
 type SeedVehicle = {
   brand: string;
   model: string;
@@ -14,6 +33,9 @@ type SeedVehicle = {
   imagePosition?: string;
 };
 
+// The fleet itself: an array (a numbered list) of vehicle objects. Add, remove,
+// or edit a car here and it instantly changes across the whole site. Each `{ }`
+// block is one vehicle following the SeedVehicle shape above.
 export const SEED_VEHICLES: SeedVehicle[] = [
   {
     brand: "Tesla",
@@ -188,6 +210,25 @@ export const SEED_VEHICLES: SeedVehicle[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Build the final list the app uses. `.map(...)` walks through every entry in
+// SEED_VEHICLES and produces a new, upgraded copy of each one. `idx` is the
+// position in the list (0 for the first car, 1 for the second, ...).
+//
+// For each car we:
+//   - `...vehicle`  copy every field from the original (the "spread" operator)
+//   - add a unique `_id`, plus created/updated timestamps
+//
+// WHY THE STRANGE _id?
+// MongoDB ids ("ObjectId") must be exactly 24 hexadecimal characters. We take a
+// fixed 22-character prefix and tack on the car's number as 2 hex digits:
+//   (idx + 1)            -> 1, 2, 3, ...
+//   .toString(16)        -> write that number in base-16 (hex): 1, 2, ... a, b
+//   .padStart(2, "0")    -> always 2 digits, e.g. "01", "0a", "0d"
+// Result: every car gets a distinct, valid 24-char id like ...a301, ...a302.
+// Using fixed ids (instead of random ones) means a car keeps the SAME id on
+// every server restart, so bookings made earlier still point to the right car.
+// ---------------------------------------------------------------------------
 export const STATIC_VEHICLES: Vehicle[] = SEED_VEHICLES.map((vehicle, idx) => ({
   ...vehicle,
   // 22-char prefix + 2 hex digits = a valid 24-char ObjectId for every vehicle.
