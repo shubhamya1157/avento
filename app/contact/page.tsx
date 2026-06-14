@@ -1,0 +1,411 @@
+"use client";
+
+import { useState } from "react";
+import Nav from "@/app/component/Nav";
+import Footer from "@/app/component/Footer";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Clock,
+  Building2,
+  ArrowUpRight,
+  Send,
+  CheckCircle,
+  ChevronDown,
+} from "lucide-react";
+
+export default function ContactPage() {
+  const [formState, setFormState] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    subject: "",
+    message: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  const faqs = [
+    {
+      question: "How quickly will Avento respond?",
+      answer:
+        "Our dedicated support team reviews all inquiries promptly. You can expect a response within 24 hours of submission.",
+    },
+    {
+      question: "Can I partner with Avento?",
+      answer:
+        "Absolutely. We are always looking to expand our premium network. We welcome discussions with fleet owners, luxury automotive brands, and corporate partners.",
+    },
+    {
+      question:
+        "Do you offer corporate or long-term rental business solutions?",
+      answer:
+        "Yes. Avento offers customized corporate accounts, long-term leasing options, and executive mobility solutions tailored to your business needs.",
+    },
+    {
+      question: "What areas do you currently serve?",
+      answer:
+        "While our primary headquarters is in Mumbai, India, our premium fleet booking and logistics support extend across multiple metropolitan hubs. Contact us to verify delivery in your area.",
+    },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    // Simulate api submission
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setIsSubmitting(false);
+    setSubmitted(true);
+  };
+
+  return (
+    <>
+      <Nav />
+
+      <main className="min-h-screen bg-black text-white pt-32 pb-20 relative overflow-hidden">
+        {/* Background glow effects */}
+        <div className="absolute top-1/4 left-1/4 h-[35rem] w-[35rem] rounded-full bg-white/5 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 h-[35rem] w-[35rem] rounded-full bg-white/5 blur-[120px] pointer-events-none" />
+
+        <div className="mx-auto max-w-7xl px-6 md:px-12 lg:px-24 relative z-10">
+          {/* Header Hero Section */}
+          <div className="text-center max-w-3xl mx-auto space-y-4 mb-20">
+            <span className="text-xs uppercase tracking-[0.6em] text-zinc-500 font-bold block">
+              Get In Touch
+            </span>
+            <h1 className="text-5xl sm:text-7xl font-black tracking-tight leading-none bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-transparent">
+              LET&apos;S START THE CONVERSATION
+            </h1>
+            <p className="text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
+              Every destination begins with a conversation. Share your vision
+              with Avento, and together we&apos;ll craft a journey that&apos;s remembered
+              long after the road ends.
+            </p>
+          </div>
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
+            {/* Left Column: Quick Contact & Headquarters Info (5 cols) */}
+            <div className="lg:col-span-5 space-y-8 flex flex-col justify-between">
+              {/* Quick Contacts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a
+                  href="mailto:shubhamya.1157@gmail.com"
+                  className="group rounded-3xl border border-white/5 bg-zinc-900/25 p-6 backdrop-blur-md transition-all duration-300 hover:border-white/10 hover:scale-[1.01]"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-white transition-colors">
+                    <Mail size={18} />
+                  </div>
+                  <h3 className="mt-4 font-bold text-sm text-white">
+                    Email Us
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors break-words">
+                    support@avento.com
+                  </p>
+                </a>
+
+                <a
+                  href="tel:+918619815840"
+                  className="group rounded-3xl border border-white/5 bg-zinc-900/25 p-6 backdrop-blur-md transition-all duration-300 hover:border-white/10 hover:scale-[1.01]"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-white transition-colors">
+                    <Phone size={18} />
+                  </div>
+                  <h3 className="mt-4 font-bold text-sm text-white">Call Us</h3>
+                  <p className="mt-1 text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">
+                    +91 86198 15840
+                  </p>
+                </a>
+              </div>
+
+              {/* Headquarters Details Card */}
+              <div className="rounded-3xl border border-white/5 bg-zinc-900/25 p-8 backdrop-blur-md space-y-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 h-32 w-32 bg-white/[0.02] rounded-bl-full pointer-events-none" />
+
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400">
+                    <Building2 size={18} />
+                  </div>
+                  <h3 className="font-bold text-lg text-white">
+                    Avento India HQ
+                  </h3>
+                </div>
+
+                <div className="space-y-4 text-xs text-zinc-400">
+                  <div className="flex items-start gap-3">
+                    <MapPin
+                      size={16}
+                      className="text-zinc-500 shrink-0 mt-0.5"
+                    />
+                    <div>
+                      <p className="font-semibold text-white">Office Address</p>
+                      <p className="mt-0.5">Mumbai, Maharashtra, India</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Clock
+                      size={16}
+                      className="text-zinc-500 shrink-0 mt-0.5"
+                    />
+                    <div>
+                      <p className="font-semibold text-white">Working Hours</p>
+                      <p className="mt-0.5">Monday - Saturday</p>
+                      <p className="text-zinc-500">9:00 AM - 7:00 PM IST</p>
+                    </div>
+                  </div>
+                </div>
+
+                <a
+                  href="https://maps.google.com/?q=Mumbai,Maharashtra"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between w-full rounded-2xl border border-white/5 bg-white/5 py-4 px-5 text-xs text-white hover:bg-white/10 hover:border-white/10 transition-all group"
+                >
+                  <span className="font-semibold flex items-center gap-2">
+                    <MapPin size={14} className="text-zinc-400" />
+                    Open in Google Maps
+                  </span>
+                  <ArrowUpRight
+                    size={14}
+                    className="text-zinc-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+                  />
+                </a>
+              </div>
+            </div>
+
+            {/* Right Column: Headquarters Visual Image Card (7 cols) */}
+            <div className="lg:col-span-7 h-full">
+              <div className="rounded-3xl border border-white/5 bg-zinc-900/25 overflow-hidden backdrop-blur-md group h-full flex flex-col justify-between min-h-[450px] relative">
+                <div className="relative flex-grow w-full h-full min-h-[450px]">
+                  <img
+                    src="/HeadQuater.png"
+                    alt="Avento Headquarters"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  <div className="absolute bottom-6 left-8">
+                    <h4 className="text-lg font-bold text-white mt-1">
+                      AVENTO MUMBAI HQ
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Send Message Form Section */}
+          <div className="mt-16 max-w-4xl mx-auto">
+            <div className="rounded-3xl border border-white/5 bg-zinc-900/25 p-8 md:p-12 backdrop-blur-md relative">
+              {!submitted ? (
+                <div>
+                  <h3 className="text-2xl font-bold mb-2">Send a Message</h3>
+                  <p className="text-xs text-zinc-500 mb-8">
+                    Fill out the form below and our agents will get back to
+                    you shortly.
+                  </p>
+
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formState.name}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              name: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. Shubham Yadav"
+                          className="w-full rounded-xl border border-white/5 bg-white/5 p-4 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                          Email Address
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={formState.email}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              email: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. shubhamya.1157@gmail.com"
+                          className="w-full rounded-xl border border-white/5 bg-white/5 p-4 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                          Phone Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={formState.phone}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              phone: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. +91 8619815840"
+                          className="w-full rounded-xl border border-white/5 bg-white/5 p-4 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                          Subject
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formState.subject}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              subject: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. Luxury SUV Booking "
+                          className="w-full rounded-xl border border-white/5 bg-white/5 p-4 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/[0.08]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                        Your Message
+                      </label>
+                      <textarea
+                        rows={6}
+                        required
+                        value={formState.message}
+                        onChange={(e) =>
+                          setFormState({
+                            ...formState,
+                            message: e.target.value,
+                          })
+                        }
+                        placeholder="Share your travel dates, preferred vehicle (e.g. Premium Sedan, Supercar), and any special requirements (e.g. private chauffeur, airport transfer)..."
+                        className="w-full rounded-xl border border-white/5 bg-white/5 p-4 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/[0.08] resize-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full rounded-xl bg-white py-4.5 text-xs font-bold text-black hover:bg-zinc-200 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2 cursor-pointer mt-6"
+                    >
+                      {isSubmitting ? (
+                        "Sending Message..."
+                      ) : (
+                        <>
+                          Send Message
+                          <Send size={12} />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="py-16 text-center space-y-4">
+                  <div className="mx-auto h-16 w-16 bg-white/10 border border-white/10 rounded-full flex items-center justify-center text-white">
+                    <CheckCircle size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white">
+                    Message Sent Successfully
+                  </h3>
+                  <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                    Thank you for reaching out. We have received your message
+                    and an Avento representative will get back to you shortly.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSubmitted(false);
+                      setFormState({
+                        name: "",
+                        email: "",
+                        phone: "",
+                        subject: "",
+                        message: "",
+                      });
+                    }}
+                    className="mt-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-6 py-2.5 text-xs font-semibold text-white transition"
+                  >
+                    Send Another Message
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* FAQs Section */}
+          <div className="mt-32 max-w-4xl mx-auto">
+            <div className="text-center mb-12 space-y-2">
+              <span className="text-[10px] uppercase tracking-[0.4em] text-zinc-500 font-bold block">
+                Questions
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black">
+                FREQUENTLY ASKED
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {faqs.map((faq, index) => {
+                const isOpen = openFaq === index;
+                return (
+                  <div
+                    key={index}
+                    className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/20 backdrop-blur-md transition-colors"
+                  >
+                    <button
+                      onClick={() => setOpenFaq(isOpen ? null : index)}
+                      className="flex w-full items-center justify-between p-5 text-left text-sm font-bold text-white outline-none"
+                    >
+                      <span>{faq.question}</span>
+                      <ChevronDown
+                        size={16}
+                        className={`text-zinc-500 transition-transform duration-300 ${isOpen ? "rotate-180 text-white" : ""}`}
+                      />
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                        >
+                          <div className="px-5 pb-5 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/[0.02]">
+                            {faq.answer}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <Footer />
+    </>
+  );
+}
