@@ -12,33 +12,57 @@
 // And it asks `useSession()` whether someone is currently logged in.
 // ===========================================================================
 
+// 'use client' tells Next.js this file runs in the visitor's BROWSER (not only
+// on the server). We need that here because the nav bar is interactive: it has
+// buttons to click, popups to open, and it remembers things while you use it.
 'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
-import { User, LogOut, Menu, X, Calendar } from "lucide-react";
-import AuthModal from "./AuthModal";
+// "import" means: borrow a tool that was built somewhere else so we can use it
+// here. Each line below pulls in one or more named tools.
+import { useState } from "react";                      // useState = React's memory tool (explained below)
+import Link from "next/link";                          // Link = Next.js's fast in-app link (no full page reload)
+import { useSession, signOut } from "next-auth/react"; // login helpers: read who's logged in / log them out
+import { User, LogOut, Menu, X, Calendar } from "lucide-react"; // ready-made icon shapes
+import AuthModal from "./AuthModal";                   // our own login/sign-up popup, from a sibling file
 
+// A "component" is a reusable piece of screen, written as a function that
+// returns the markup to show. "export default" makes Nav the main thing this
+// file hands out, so other files can drop <Nav /> into their pages.
 export default function Nav() {
+  // A "hook" is a special React function whose name starts with "use". Hooks let
+  // a component tap into React features like memory and login state.
+  // useSession() asks the login system who is signed in. We pull out its `data`
+  // field and rename it to `session` ({ data: session } is "destructuring" —
+  // unpacking one named value out of a bigger object).
   // `session` is the logged-in user's info, or null/undefined if logged out.
   const { data: session } = useSession();
 
-  // Whether the login/signup popup is open, and which tab it should show.
+  // useState is React's MEMORY. It gives back two things in an array:
+  //   [theCurrentValue, aFunctionToChangeIt]
+  // We unpack them with [a, b] = ... . Whenever we call the change-function,
+  // React automatically re-draws this component with the new value.
+  // Here: is the login/sign-up popup open? It starts closed (false).
   const [authOpen, setAuthOpen] = useState(false);
+  // Which tab the popup opens on. The <"login" | "signup"> part is TypeScript
+  // promising this can only ever be one of those two exact words.
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
-  // Whether the small-screen dropdown menu is open.
+  // Whether the small-screen dropdown menu is open. Starts closed.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // This is an "arrow function" — a small reusable action written as
+  // (inputs) => { steps }. We give it a name, openAuth, so buttons can call it.
   // Open the auth popup in a chosen mode, and close the mobile menu at the same
   // time (so they don't overlap). Reused by several buttons below.
   const openAuth = (mode: "login" | "signup") => {
-    setAuthMode(mode);
-    setAuthOpen(true);
-    setMobileMenuOpen(false);
+    setAuthMode(mode);     // remember which tab to show
+    setAuthOpen(true);     // make the popup visible
+    setMobileMenuOpen(false); // tidy up: close the phone menu if it was open
   };
 
+  // An "array" is just an ordered list, written inside [ ]. Here each item is an
+  // "object" ({ ... }), a little bundle of labelled values — a web address
+  // (href) and the text to show (label).
   // The page links, kept in one array so we can render them with a loop instead
   // of copy-pasting the same markup four times.
   const navLinks = [
@@ -48,9 +72,12 @@ export default function Nav() {
     { href: "/contact", label: "Contact" },
   ];
 
+  // Everything after "return (" is JSX: HTML-like markup that describes what to
+  // put on screen. Inside JSX you write comments as {/* like this */}, because
+  // the normal // would be treated as text and break the layout.
   return (
-    // The <> ... </> fragment lets us return the nav bar AND the auth popup
-    // side by side without an extra wrapper element.
+    // The <> ... </> is a "Fragment": an empty wrapper that lets us return the
+    // nav bar AND the auth popup side by side without adding an extra <div>.
     <>
       <nav className="fixed top-4 left-1/2 z-[9999] w-[95%] max-w-7xl -translate-x-1/2">
         <div className="relative flex h-20 items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-6 md:px-8 backdrop-blur-xl">
@@ -64,7 +91,10 @@ export default function Nav() {
           {/* Center links — hidden on phones ("hidden md:flex" = show only from
               medium screens up), shown as a row on larger screens. */}
           <div className="hidden md:flex flex-1 justify-center items-center gap-8 lg:gap-10">
-            {/* Loop over navLinks and draw one <Link> for each. React needs a
+            {/* .map() walks through every item in a list and produces one piece
+                of markup per item — like a stamp pressed once per link. Curly
+                braces { } let us drop this JavaScript result into the JSX.
+                Loop over navLinks and draw one <Link> for each. React needs a
                 unique `key` on each looped item to track them efficiently. */}
             {navLinks.map((link) => (
               <Link
@@ -102,6 +132,7 @@ export default function Nav() {
                   </span>
                 </div>
                 <button
+                  // onClick says "when this button is clicked, run this action".
                   // signOut logs them out, then sends them to the home page.
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="flex items-center gap-1 text-sm font-medium text-zinc-400 transition hover:text-white"
@@ -207,8 +238,12 @@ export default function Nav() {
         )}
       </nav>
 
-      {/* The login/signup popup itself. It sits here always, but only shows when
-          `authOpen` is true. `initialMode` decides which tab it opens on. */}
+      {/* The login/signup popup itself. The things we pass into it (open,
+          onClose, initialMode) are called "props" — inputs handed to a child
+          component, like settings you flip when you place it.
+          It sits here always, but only shows when `authOpen` is true.
+          onClose is the action it runs to close itself (we set authOpen back to
+          false). `initialMode` decides which tab it opens on. */}
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}

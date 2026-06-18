@@ -2,29 +2,51 @@
 // bookings/page.tsx — The "/bookings" page: the logged-in user's reservations
 // ===========================================================================
 //
+// Folder name "bookings" -> this page lives at the web address "/bookings".
+//
 // This page has three possible states it shows the user:
 //   1. Loading       — while we check the session / fetch data.
 //   2. Not logged in — a "Sign In Required" prompt with a login button.
 //   3. Logged in     — the list of their bookings, each cancellable.
 //
-// `useSession()` gives us `status`, which is one of "loading", "authenticated",
-// or "unauthenticated". We branch on it to decide what to render.
+// A "session" is the website remembering WHO is logged in right now (like a
+// wristband at an event that proves you already paid to get in).
+// `useSession()` is a hook (a "use..." helper) that reads that login info and
+// gives us `status`, which is one of "loading", "authenticated" (logged in), or
+// "unauthenticated" (logged out). We branch on it to decide what to render.
+//
+// This page also talks to "API routes" — these are small server addresses (like
+// /api/bookings) that THIS app provides to fetch or change data behind the
+// scenes. The browser asks them for data; they reply, usually in JSON (a plain
+// text format for sending structured data, made of the same { } objects and
+// [ ] lists you see in the code).
 // ===========================================================================
 
+// Runs in the browser (needs state, clicks, and login info). See note above.
 'use client';
 
+// useState = remembered values; useEffect = run code at certain moments (e.g.
+// right after the page appears). Both are React hooks.
 import { useState, useEffect } from "react";
 import Link from "next/link";
+// useSession reads the current login/session info (from the next-auth library).
 import { useSession } from "next-auth/react";
 import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
+// AuthModal = the pop-up login/signup window shown when a guest must sign in.
 import AuthModal from "@/app/component/AuthModal";
+// "import type" brings in only a TYPE description (the shape of a Booking), used
+// by TypeScript to check our data. It vanishes when the app actually runs.
 import type { Booking } from "@/app/lib/types";
 import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Helper: turn a stored date string into a friendly label like "Jun 16, 2026".
-// toLocaleDateString formats a date according to the given options.
+//   - Input: dateString, a date written as text (e.g. "2026-06-16").
+//   - Output: a nicely formatted, human-readable date string.
+// new Date(...) turns the text into a real date the computer understands, and
+// toLocaleDateString formats that date using the options we pass (US style,
+// short month name, etc.).
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("en-US", {
     year: "numeric",
@@ -33,26 +55,39 @@ function formatDate(dateString: string) {
   });
 }
 
-// Helper: count how many days a booking spans (used to show "3 days"). Same
-// millisecond-to-days math as in the booking form, rounded up.
+// Helper: count how many days a booking spans (used to show "3 days").
+//   - Inputs: start and end dates (as text).
+//   - Output: the number of days between them, rounded up.
+// Computers measure time in milliseconds. .getTime() gives each date as a count
+// of milliseconds; we subtract to get the gap, Math.abs makes it positive (never
+// negative), and dividing by (1000*60*60*24) converts milliseconds -> days.
+// Math.ceil rounds UP so even a partial day counts as a full day.
 function getDaysCount(start: string, end: string) {
   const diff = Math.abs(new Date(end).getTime() - new Date(start).getTime());
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 export default function BookingsPage() {
+  // useSession() hands back an object; we pull two fields out of it. The
+  // "data: session" part renames `data` to the friendlier name `session`.
   // `status` tells us the login state; `session` holds the user's info.
   const { data: session, status } = useSession();
 
-  // The user's bookings, plus flags for our different UI states.
+  // The user's bookings, plus flags for our different on-screen states.
+  // useState<Booking[]>([]) means: this remembers a LIST of Bookings, starting
+  // empty ([]). "Booking[]" is TypeScript for "an array of Booking items".
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadedForSession, setLoadedForSession] = useState(false); // first fetch done?
   const [cancellingId, setCancellingId] = useState<string | null>(null); // which booking is mid-cancel
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false); // login popup open?
 
-  // Fetch the user's bookings once they're logged in. This effect re-runs
-  // whenever `status` changes (see the [status] at the end).
+  // useEffect lets us run some code AFTER the page draws, and again whenever a
+  // value we depend on changes. The list at the very end — [status] — is the
+  // "watch list": React re-runs this block each time `status` changes. (An empty
+  // [] would mean "run only once"; no list would mean "run after every redraw".)
+  //
+  // Here: fetch the user's bookings once they're logged in.
   useEffect(() => {
     if (status !== "authenticated") return; // only fetch when logged in
 
@@ -61,18 +96,30 @@ export default function BookingsPage() {
     // would warn). The cleanup function at the bottom flips this to true.
     let cancelled = false;
 
-    // An immediately-invoked async function so we can use await inside useEffect.
+    // An immediately-invoked async function: we define a little async function
+    // and call it right away with the "(...)()" at the end. (useEffect itself
+    // can't be async, so this is the standard way to use await inside it.)
     (async () => {
+      // "try { ... } catch { ... }" = attempt the risky stuff; if anything goes
+      // wrong (e.g. no internet), jump to catch instead of crashing the page.
       try {
+        // fetch(...) asks our server's /api/bookings address for this user's
+        // bookings; await pauses until the reply arrives. res is the response.
         const res = await fetch("/api/bookings");
+        // res.ok is true for a successful reply. "!res.ok" = NOT ok, so we throw
+        // an error (which sends us down to the catch block below).
         if (!res.ok) throw new Error("Failed to load booking details");
+        // The reply body is text in JSON form; res.json() turns it back into
+        // real JavaScript data (here, the array of bookings).
         const data = await res.json();
-        if (!cancelled) setBookings(data);
+        if (!cancelled) setBookings(data); // save them into state -> redraw
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load bookings");
         }
       } finally {
+        // "finally" always runs at the end, whether it succeeded or failed.
+        // Either way, the first fetch attempt is now finished.
         if (!cancelled) setLoadedForSession(true);
       }
     })();
@@ -85,7 +132,8 @@ export default function BookingsPage() {
   }, [status]);
 
   // Re-fetch the bookings after a change (e.g. right after a cancellation) so
-  // the list reflects the latest data.
+  // the list reflects the latest data. Same fetch-then-json steps as above.
+  //   - Input: none.  Output: none (it just updates the bookings state).
   const refreshBookings = async () => {
     try {
       const res = await fetch("/api/bookings");
@@ -98,6 +146,8 @@ export default function BookingsPage() {
 
   // Cancel one booking. We first ask for confirmation, then PATCH the API, then
   // refresh the list. `cancellingId` lets us show a spinner on just that row.
+  //   - Input: bookingId, the unique id of the booking the user wants to cancel.
+  //   - Output: none returned; it updates the server and our on-screen state.
   const handleCancelBooking = async (bookingId: string) => {
     // confirm() shows a built-in browser yes/no dialog; false = user clicked No.
     if (!confirm("Are you sure you want to cancel this booking?")) return;
@@ -106,16 +156,26 @@ export default function BookingsPage() {
     setError(null);
 
     try {
+      // This fetch SENDS data, not just reads it. The second argument is an
+      // options bundle:
+      //   method "PATCH" = partially update an existing booking (vs GET = read).
+      //   headers       = a note telling the server the body is JSON text.
+      //   body          = the actual data we send. JSON.stringify turns our
+      //                   object { status: "cancelled" } into JSON text, since
+      //                   the network can only carry text, not live objects.
+      // The backticks `.../${bookingId}` slot this booking's id into the URL.
       const res = await fetch(`/api/bookings/${bookingId}`, {
         method: "PATCH", // PATCH = partially update an existing booking
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "cancelled" }),
       });
 
-      const data = await res.json();
+      const data = await res.json(); // read the server's reply back into data
+      // If the server reported a problem, show its message (or a fallback).
+      // "a || b" means "use a, but if a is empty/missing, use b instead".
       if (!res.ok) throw new Error(data.message || "Failed to cancel booking");
 
-      refreshBookings();
+      refreshBookings(); // success -> reload the list so the row updates
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong while cancelling");
     } finally {
@@ -124,10 +184,13 @@ export default function BookingsPage() {
   };
 
   // We're "loading" while the session is still being checked, OR while logged in
-  // but the first bookings fetch hasn't finished yet.
+  // but the first bookings fetch hasn't finished yet. "||" means OR (either side
+  // true makes it true); "&&" means AND (both sides must be true).
   const isLoading = status === "loading" || (status === "authenticated" && !loadedForSession);
 
   // STATE 1: still loading — show a centered spinner and nothing else.
+  // Returning early here means the rest of the function below never runs while
+  // we're loading. Loader2 with "animate-spin" is just a spinning circle icon.
   if (isLoading) {
     return (
       <>
@@ -146,6 +209,9 @@ export default function BookingsPage() {
 
       <main className="min-h-screen bg-black px-6 pb-20 pt-32 text-white md:px-12 lg:px-24">
         <div className="mx-auto max-w-5xl">
+          {/* STATE 2 vs STATE 3 chosen by a ternary (condition ? A : B). If the
+              user is logged out, show the sign-in prompt (A); otherwise show
+              their bookings dashboard (B, far below after the ":"). */}
           {/* STATE 2: not logged in — show a sign-in prompt instead of bookings. */}
           {status === "unauthenticated" ? (
             <div className="flex flex-col items-center justify-center rounded-3xl border border-white/10 bg-zinc-900/15 py-24 text-center backdrop-blur-md">
@@ -154,6 +220,8 @@ export default function BookingsPage() {
               <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
                 Log in to view your booking history and manage active reservations.
               </p>
+              {/* Clicking sets authOpen to true, which makes the login pop-up
+                  (the AuthModal near the bottom of the file) appear. */}
               <button
                 onClick={() => setAuthOpen(true)}
                 className="mt-8 cursor-pointer rounded-full bg-white px-8 py-3 text-sm font-bold text-black transition hover:scale-105 active:scale-95"
@@ -174,6 +242,8 @@ export default function BookingsPage() {
                 </div>
               </div>
 
+              {/* "error && (...)" shows this red banner ONLY when `error` holds
+                  a message; if error is null, nothing appears here. */}
               {error && (
                 <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
                   <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -197,10 +267,13 @@ export default function BookingsPage() {
               ) : (
                 <div className="space-y-6">
                   <AnimatePresence mode="popLayout" initial={false}>
+                    {/* Loop over the bookings and draw one card per booking.
+                        `booking` is the current item each time around. */}
                     {bookings.map((booking) => {
-                      // Pre-compute a few values used in this card's markup.
+                      // Pre-compute a few values used in this card's markup, so
+                      // the JSX below stays clean and easy to read.
                       const days = getDaysCount(booking.startDate, booking.endDate);
-                      const isCancelled = booking.status === "cancelled";
+                      const isCancelled = booking.status === "cancelled"; // true/false
                       const vehicle = booking.vehicleId; // may be null (see types)
 
                       return (
@@ -212,6 +285,8 @@ export default function BookingsPage() {
                           className="flex flex-col items-center gap-6 overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/60 p-6 md:flex-row"
                         >
                           <div className="h-36 w-full shrink-0 overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 md:w-56">
+                            {/* If we have the vehicle's details, show its photo;
+                                otherwise (the ":" branch) show a placeholder. */}
                             {vehicle ? (
                               <img
                                 src={vehicle.image}
@@ -236,6 +311,8 @@ export default function BookingsPage() {
                                 </h3>
                               </div>
 
+                              {/* Show a red "Cancelled" badge or a green
+                                  "Confirmed" badge depending on isCancelled. */}
                               {isCancelled ? (
                                 <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
                                   <XCircle size={12} /> Cancelled
@@ -257,6 +334,8 @@ export default function BookingsPage() {
                               <div className="space-y-1">
                                 <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Duration</span>
                                 <span className="flex items-center gap-1 font-semibold text-zinc-200">
+                                  {/* Show "1 day" but "3 days": a tiny ternary
+                                      picks the singular or plural word. */}
                                   <Clock size={12} /> {days} {days === 1 ? "day" : "days"}
                                 </span>
                               </div>
@@ -271,13 +350,20 @@ export default function BookingsPage() {
                             </div>
                           </div>
 
+                          {/* Only show the Cancel button when the booking is
+                              NOT already cancelled ("!isCancelled &&"). */}
                           {!isCancelled && (
                             <div className="flex w-full shrink-0 justify-end md:w-auto">
+                              {/* onClick cancels THIS booking by its id. The
+                                  button disables itself while this exact row is
+                                  mid-cancel (cancellingId matches its id). */}
                               <button
                                 onClick={() => handleCancelBooking(booking._id)}
                                 disabled={cancellingId === booking._id}
                                 className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-xs font-bold text-red-400 transition hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
                               >
+                                {/* While cancelling this row, show a spinning
+                                    loader; otherwise show a trash-can icon. */}
                                 {cancellingId === booking._id ? (
                                   <Loader2 size={14} className="animate-spin" />
                                 ) : (
@@ -298,6 +384,9 @@ export default function BookingsPage() {
         </div>
       </main>
 
+      {/* The login pop-up. "open" controls whether it's visible (driven by our
+          authOpen state); "onClose" lets it tell us to hide it again. These are
+          props — settings we pass into the AuthModal component. */}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialMode="login" />
       <Footer />
     </>

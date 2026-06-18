@@ -17,8 +17,14 @@
 //   - AuthModal:      the wrapper that handles the backdrop and open/close.
 // ===========================================================================
 
+// "use client" tells Next.js this file runs in the visitor's browser (not just
+// on the server). We need that here because the popup reacts to typing and
+// clicks, which can only happen in the browser.
 "use client";
 
+// `useState` is a React "hook" — a special function (its name starts with
+// "use") that lets a component remember a value between redraws. When that value
+// changes, React automatically re-draws the screen to match.
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -49,6 +55,10 @@ function AuthModalPanel({
   onClose: () => void;
 }) {
   // Which screen are we on, and the values typed into each input field.
+  // Each useState gives back a PAIR: the current value (e.g. `mode`) and a
+  // function to change it (e.g. `setMode`). Calling the setter updates the value
+  // AND tells React to redraw with the new value. The text in useState(...) is
+  // the starting value.
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [signupStep, setSignupStep] = useState<SignupStep>("form");
   const [name, setName] = useState("");
@@ -67,8 +77,17 @@ function AuthModalPanel({
 
   // -------------------------------------------------------------------------
   // LOGIN: send email + password to NextAuth and react to the result.
+  //
+  // `async` marks a function that does slow work (like talking to a server) and
+  // can "pause" without freezing the page. `await` is that pause: it waits for a
+  // "promise" (a placeholder for a result that isn't ready yet) to finish, then
+  // hands back the real value. `signIn` is NextAuth's helper that checks the
+  // login. `e` is the form-submit event the browser gives us.
   // -------------------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
+    // A "form submit" happens when the user presses the submit button. By
+    // default the browser would reload the whole page; preventDefault() stops
+    // that so our code can handle the login instead.
     e.preventDefault();   // stop the browser's default "reload the page" on submit
     setLoading(true);
     setError(null);
@@ -233,6 +252,9 @@ function AuthModalPanel({
           AVENTO CLUB ACCESS
         </span>
         <h2 className="text-2xl font-black tracking-tight text-white uppercase">
+          {/* A "ternary" (condition ? A : B) is a compact if/else: it shows A
+              when the condition is true, otherwise B. Chaining them picks one
+              of several headings depending on which screen we're on. */}
           {mode === "login"
             ? "RE-ESTABLISH CONNECTION"
             : signupStep === "form"

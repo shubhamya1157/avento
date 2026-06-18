@@ -15,3 +15,82 @@
    ========================================================================== */
 
 @import "tailwindcss";
+
+/* ==========================================================================
+   Cinematic effects — small reusable classes used by the hero (and anywhere
+   else you want a premium, film-like feel). Each is plain CSS so it costs
+   almost nothing and runs smoothly on its own, without JavaScript.
+   ========================================================================== */
+
+/* ---- 1. "Ken Burns" slow zoom --------------------------------------------
+   A classic film technique: the background photo very slowly drifts in and
+   out, so a still image feels alive and cinematic. `alternate` makes it zoom
+   in, then back out, forever — no sudden jump. 20s = nice and gentle. */
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to   { transform: scale(1.12); }
+}
+.animate-kenburns {
+  animation: kenburns 20s ease-in-out infinite alternate;
+}
+
+/* ---- 2. Film grain texture -----------------------------------------------
+   Adds a faint, shifting "noise" layer on top of an element — the subtle
+   speckle you see in real cinema. Put `class="film-grain"` on a positioned
+   (relative/absolute) container and this draws the grain over it.
+   The grain itself is a tiny SVG noise pattern embedded right here as a data
+   URL, so there's no extra image file to load. */
+.film-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;                 /* cover the whole parent */
+  pointer-events: none;     /* never block clicks */
+  z-index: 20;              /* sit above photos/overlays, below the text */
+  opacity: 0.08;            /* very faint — just a texture, not a distraction */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* Nudge the texture around a few pixels so the grain looks like it's moving. */
+  animation: grain 0.6s steps(3) infinite;
+}
+@keyframes grain {
+  0%   { transform: translate(0, 0); }
+  33%  { transform: translate(-2%, 1%); }
+  66%  { transform: translate(1%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ---- 3. Entrance "fade-up" -----------------------------------------------
+   Used by the hero text. Each element it's put on starts invisible and slightly
+   lower, then rises into place. This is PURE CSS (no JavaScript), so the text
+   always reveals itself even if the page's JS is slow or blocked — that's why
+   the hero uses these classes instead of a JS animation library.
+
+   To make lines appear one-after-another (a "stagger"), add a `fade-up-N` class
+   alongside `fade-up`; each just delays the start a little more. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  opacity: 0;                              /* start hidden... */
+  animation: fade-up 0.7s ease-out forwards; /* ...then animate to visible & STAY (forwards) */
+}
+.fade-up-1 { animation-delay: 0.10s; }
+.fade-up-2 { animation-delay: 0.25s; }
+.fade-up-3 { animation-delay: 0.40s; }
+.fade-up-4 { animation-delay: 0.55s; }
+.fade-up-5 { animation-delay: 0.70s; }
+.fade-up-6 { animation-delay: 0.85s; }
+
+/* Respect users who prefer less motion: turn the animations off for them.
+   IMPORTANT: for `.fade-up` we must also force it visible (opacity: 1) — without
+   that, disabling the animation would leave it stuck at its invisible start. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-kenburns,
+  .film-grain::after {
+    animation: none;
+  }
+  .fade-up {
+    opacity: 1;
+    animation: none;
+  }
+}

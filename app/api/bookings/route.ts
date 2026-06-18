@@ -5,6 +5,22 @@
 // URL: "/api/bookings". Both methods here are PROTECTED: you must be logged in.
 // We check that by calling `auth()`, which reads the session "wristband" set up
 // in app/auth.ts. No valid session -> we reply 401 (Unauthorized) and stop.
+//
+// A few words you'll see a lot in this file, explained once:
+//   - API route: server code the browser talks to over the web at a URL.
+//   - request / response: the browser's incoming message, and our reply.
+//   - HTTP method: the "verb" of the request. GET = "give me data",
+//     POST = "here's new data to save". The function name picks the verb.
+//   - status code: a 3-digit number summarising the result. 200/201 = success,
+//     400 = bad input, 401 = not logged in, 404 = not found, 500 = server broke.
+//   - JSON: a simple text format for data, like { "name": "Sam" }. It's how the
+//     browser and server pass objects back and forth.
+//   - async / await: this work takes time (talking to a database, etc.). An
+//     `async` function is allowed to pause; `await` means "wait here for this
+//     slow step to finish before moving to the next line."
+//   - session / auth: proof of who is logged in — like a wristband at an event.
+//   - database query: a question we ask the database, e.g. "find this user's
+//     bookings."
 // ===========================================================================
 
 import { auth } from "@/app/auth";
@@ -55,7 +71,9 @@ export async function POST(req: NextRequest) {
       return apiError("Unauthorized", 401);
     }
 
-    // Read the booking details the browser sent.
+    // Read the booking details the browser sent. The body arrives as JSON text;
+    // `await req.json()` waits for it to load and turns it into an object. The
+    // { a, b, c } = ... syntax then plucks those named fields out in one line.
     const { vehicleId, startDate, endDate, totalAmount } = await req.json();
 
     if (!vehicleId || !startDate || !endDate || !totalAmount) {

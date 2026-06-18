@@ -25,7 +25,9 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   try {
-    // Pull the query parameters out of the request URL.
+    // Pull the query parameters out of the request URL. `new URL(req.url)`
+    // parses the full web address into pieces; `searchParams` is the bag of
+    // "?key=value" extras, which we then read by name below.
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type"); // e.g. "car", or null if absent
 

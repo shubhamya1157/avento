@@ -12,6 +12,10 @@
 // email" — so bad data can't sneak in.
 // ===========================================================================
 
+// "import" brings in code that lives in another package so we can use it here.
+// `mongoose` is the helper library that talks to the MongoDB database for us.
+// `Document` is a TypeScript helper type from mongoose that represents "one
+// saved record" — we borrow its built-in fields (like `_id`) just below.
 import mongoose, { Document } from "mongoose";
 
 // ---------------------------------------------------------------------------
@@ -25,17 +29,19 @@ import mongoose, { Document } from "mongoose";
 //   - phoneNumber is optional because we don't force people to give a phone
 // ---------------------------------------------------------------------------
 interface UserType extends Document {
-    name: string;
-    email: string;
-    password?: string;
-    phoneNumber?: number;
+    name: string;          // the person's display name
+    email: string;         // their email address (also used to log in)
+    password?: string;     // scrambled password — absent for Google sign-ins
+    phoneNumber?: number;  // optional contact number
     role: "user" | "partner" | "admin"; // exactly one of these three words
     emailVerified: boolean;             // true once they confirm via OTP email
 }
 
 // ---------------------------------------------------------------------------
 // The actual schema — the database-level rules for a user. Each field lists
-// its type and any constraints.
+// its type and any constraints. A "schema" is the rulebook the database checks
+// every record against before it agrees to save it. `new mongoose.Schema(...)`
+// builds one of these rulebooks.
 // ---------------------------------------------------------------------------
 const userSchema = new mongoose.Schema<UserType>(
     {

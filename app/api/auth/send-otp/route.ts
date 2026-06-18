@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Don't send a sign-up code to an email that already has an account.
+    // `findOne({ email })` is a database query: "find one user with this email."
+    // It returns the matching user, or null (nothing) if none exists.
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
       return apiError("Email already registered", 400);

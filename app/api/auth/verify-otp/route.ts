@@ -5,6 +5,9 @@
 // URL: "/api/auth/verify-otp". After send-otp emailed a code, the form sends it
 // back here along with the user's details. If the code is right, we finally
 // create the verified account.
+//
+// "OTP" = One-Time Password: a short code that's good once, for a short time.
+// This is a POST route (the browser SENDS data here to create the account).
 // ===========================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -58,7 +61,9 @@ export async function POST(req: NextRequest) {
       emailVerified: true,
     });
 
-    // Strip the password hash out of the reply.
+    // Strip the password hash out of the reply. `.toObject()` makes a plain,
+    // editable copy of the saved record, and `delete` removes the password
+    // field from that copy so the scrambled password never goes to the browser.
     const userObj = user.toObject();
     delete userObj.password;
 

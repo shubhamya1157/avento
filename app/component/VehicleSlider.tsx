@@ -12,51 +12,73 @@
 //     here, to fetch the latest vehicle list from the server.
 // ===========================================================================
 
+// 'use client' = this runs in the visitor's browser, which it must, because the
+// slider is interactive (arrows, a button, and live data fetching).
 'use client';
 
-import { useState, useEffect } from "react";
-import { ArrowLeft, ArrowRight, Zap, Users, Car } from "lucide-react";
+// "import" borrows tools built elsewhere.
+import { useState, useEffect } from "react";                  // React's memory + after-render hooks
+import { ArrowLeft, ArrowRight, Zap, Users, Car } from "lucide-react"; // icon shapes
 import { motion, AnimatePresence } from "framer-motion"; // animation library
+// "import type" brings in only a TYPE — a description of the shape of a vehicle
+// (its brand, price, seats, etc.). Types are TypeScript's safety checks and
+// vanish when the app actually runs; they don't add any real code.
 import type { Vehicle } from "@/app/lib/types";
-import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
-import BookingModal from "./BookingModal";
+import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles"; // a built-in starter list of cars
+import BookingModal from "./BookingModal";                // our own booking popup
 
+// A "component" is a reusable piece of screen written as a function returning
+// markup. This one is the whole rotating vehicle showcase.
 export default function VehicleSlider() {
   // The list of vehicles. It STARTS with the built-in static list so the slider
   // shows cars instantly, with nothing to wait for. The useEffect below then
   // quietly refreshes it from the API.
   const [vehicles, setVehicles] = useState<Vehicle[]>(STATIC_VEHICLES);
 
-  // Which vehicle is currently shown, as a position in the list (0 = first).
+  // Which vehicle is currently shown, as a position in the list (0 = first item,
+  // because counting in code starts at zero, not one).
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // The vehicle the user picked to book, and whether the booking popup is open.
+  // The vehicle the user picked to book (null = "none chosen yet"), and whether
+  // the booking popup is open.
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
 
-  // Run once after the component first renders (the empty [] at the end means
-  // "only on first appearance"). It asks the API for the vehicle list and, if
-  // that succeeds, swaps in the fresh data. If the request fails we just keep
-  // showing the static list, so the user never sees a broken page.
+  // useEffect is a hook that runs code AFTER the screen has first been drawn —
+  // perfect for fetching data, which shouldn't block the page from appearing.
+  // The empty [] at the very end is its "dependency list": empty means
+  // "run this just once, on first appearance, and never again".
+  // It asks the API for the vehicle list and, if that succeeds, swaps in the
+  // fresh data. If the request fails we just keep showing the static list, so
+  // the user never sees a broken page.
   useEffect(() => {
+    // "async" marks a function that does slow work (like talking to a server)
+    // without freezing the page. Inside it, "await" means "pause here until the
+    // slow step finishes, then carry on". A slow step hands back a "promise" —
+    // an IOU for a result that will arrive a moment later.
     const fetchVehicles = async () => {
+      // try/catch: attempt the risky steps in "try"; if anything goes wrong,
+      // jump to "catch" instead of crashing the whole page.
       try {
-        const res = await fetch("/api/vehicles");
-        if (res.ok) {
-          const data = await res.json();
-          setVehicles(data);
+        const res = await fetch("/api/vehicles"); // ask our server for the data; wait for the reply
+        if (res.ok) {                              // res.ok is true only if the reply was a success
+          const data = await res.json();           // turn the raw reply into a usable JS list; wait for it
+          setVehicles(data);                       // save it into memory, which re-draws the slider
         }
       } catch (err) {
-        console.error("Failed to load slider vehicles", err);
+        console.error("Failed to load slider vehicles", err); // log the problem; keep the static list
       }
     };
-    fetchVehicles();
+    fetchVehicles(); // actually start the fetch we just defined above
   }, []);
 
-  // Go to the next vehicle. The "% vehicles.length" (modulo / remainder) makes
-  // the index wrap back around to 0 after the last one, so the carousel loops.
+  // Go to the next vehicle. We pass setCurrentIndex a small function (prev) =>
+  // ... ; React hands us the previous index as `prev` so we can build the new
+  // one from it safely. The "%" is "modulo" (the remainder after dividing): when
+  // prev+1 reaches the list length it wraps back to 0, so the carousel loops
+  // endlessly instead of running off the end.
   const handleNext = () => {
-    if (vehicles.length > 0) {
+    if (vehicles.length > 0) { // .length is how many items the list has; only move if there are any
       setCurrentIndex((prev) => (prev + 1) % vehicles.length);
     }
   };
@@ -70,10 +92,12 @@ export default function VehicleSlider() {
     }
   };
 
-  // Safety: if there are somehow no vehicles, draw nothing.
+  // Safety: if there are somehow no vehicles, draw nothing (returning null tells
+  // React "put nothing on screen"). This guards the next line from crashing.
   if (vehicles.length === 0) return null;
 
-  // The single vehicle we're currently displaying.
+  // Pick the one vehicle to display right now by its position in the list.
+  // vehicles[currentIndex] reads the item at that slot (e.g. vehicles[0]).
   const activeVehicle = vehicles[currentIndex];
 
   return (
@@ -135,7 +159,10 @@ export default function VehicleSlider() {
                   <span className="block text-[10px] font-medium uppercase tracking-widest text-zinc-500">Capacity</span>
                   <span className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
                     <Users size={13} className="text-zinc-400" />
-                    {/* Show "Seat" vs "Seats" depending on the number */}
+                    {/* The "? :" is a "ternary" — a one-line if/else. Read it
+                        as: IF seats equals 1, THEN "Seat", ELSE "Seats". (=== is
+                        an exact-equality check.) So 1 reads "1 Seat", 4 reads
+                        "4 Seats". Show "Seat" vs "Seats" depending on the number. */}
                     {activeVehicle.seats} {activeVehicle.seats === 1 ? "Seat" : "Seats"}
                   </span>
                 </div>
@@ -148,6 +175,8 @@ export default function VehicleSlider() {
                   <span className="text-2xl font-black text-white">${activeVehicle.pricePerDay}</span>
                 </div>
                 <button
+                  // onClick = "when clicked, run these steps". Here we save the
+                  // chosen car into memory, then flip the popup open.
                   onClick={() => {
                     setSelectedVehicle(activeVehicle); // remember which car
                     setBookingOpen(true);              // open the popup
@@ -176,7 +205,11 @@ export default function VehicleSlider() {
             >
               <ArrowRight size={18} />
             </button>
-            {/* padStart(2, "0") shows numbers as 01, 02, ... for a neat look */}
+            {/* String(...) turns a number into text so we can pad it. padStart(2,
+                "0") makes sure the text is at least 2 characters, filling the
+                front with "0" — so 1 becomes "01". We add 1 to currentIndex
+                because positions count from 0 but humans count from 1.
+                padStart(2, "0") shows numbers as 01, 02, ... for a neat look */}
             <span className="self-center pl-2 text-xs font-semibold tracking-wider text-zinc-500">
               {String(currentIndex + 1).padStart(2, "0")} / {String(vehicles.length).padStart(2, "0")}
             </span>
@@ -194,6 +227,9 @@ export default function VehicleSlider() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.5 }}
+              // The "??" is the "nullish" fallback: use the left side if it has
+              // a value, otherwise use the right side. So if a vehicle didn't
+              // specify a position, we fall back to "center".
               // Some photos need to be nudged up/down so the car is centered;
               // imagePosition (if set) controls that, otherwise default center.
               style={{ objectPosition: activeVehicle.imagePosition ?? "center" }}
@@ -205,8 +241,11 @@ export default function VehicleSlider() {
         </div>
       </div>
 
-      {/* The booking popup. It's always here in the markup but only visible when
-          `bookingOpen` is true, showing the vehicle the user selected. */}
+      {/* The booking popup. The values we hand it (open, onClose, vehicle) are
+          its "props" — inputs that configure a child component. It's always here
+          in the markup but only visible when `bookingOpen` is true, showing the
+          vehicle the user selected. onClose is the action it runs to close
+          itself. */}
       <BookingModal
         open={bookingOpen}
         onClose={() => setBookingOpen(false)}

@@ -13,6 +13,8 @@
 // client' component — it runs on the server.
 // ===========================================================================
 
+// "import" lines pull in code that lives in other files/packages so we can use
+// it here. Think of it as borrowing a tool from another toolbox.
 import type { Metadata } from "next";
 import Providers from "@/app/component/Providers";
 import "./globals.css"; // load the global stylesheet (Tailwind) for the whole app
@@ -20,12 +22,17 @@ import "./globals.css"; // load the global stylesheet (Tailwind) for the whole a
 // `metadata` is read by Next.js to fill in the page's <head> — the browser tab
 // title and the description search engines show. It's set here once for the app.
 export const metadata: Metadata = {
-  title: "Avento | Ready to move!",
+  title: "Avento:Ready to move!",
   description: "Build by shubham yadav",
 };
 
-// The root layout component. `children` is whatever page is currently being
-// shown. `Readonly<{...}>` just says we won't modify the props.
+// A "component" is a reusable piece of UI written as a function that returns
+// what to show on screen. "Props" are the inputs you hand a component, like
+// arguments to a function. Here the only prop is `children`.
+//
+// `children` is whatever page is currently being shown. `React.ReactNode` is
+// just the type meaning "anything React can display" (text, tags, components).
+// `Readonly<{...}>` says we promise not to modify the props we were given.
 export default function RootLayout({
   children,
 }: Readonly<{

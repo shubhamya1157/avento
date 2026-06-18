@@ -12,12 +12,21 @@
 //     page reload but doesn't send anywhere yet (no backend wired up for it).
 // ===========================================================================
 
+// 'use client' = this runs in the visitor's browser. (See Providers.tsx for the
+// full explanation.) The footer needs it because the newsletter form reacts to
+// a click.
 'use client';
 
-import Link from "next/link";
-import { Mail, Phone, MapPin } from "lucide-react";
+// "import" borrows tools made elsewhere.
+import Link from "next/link";                 // Next.js's fast in-app link, for internal pages
+import { Mail, Phone, MapPin } from "lucide-react"; // ready-made icon shapes
 
+// A "component" is a reusable piece of screen written as a function returning
+// markup. This one is the whole page footer.
 export default function Footer() {
+  // new Date() makes an object holding the current date and time; .getFullYear()
+  // pulls just the year out of it (e.g. 2026). We store it so the copyright text
+  // below always shows this year on its own.
   // Compute the current year so the copyright text updates itself every year
   // instead of being hard-coded.
   const currentYear = new Date().getFullYear();
@@ -35,9 +44,17 @@ export default function Footer() {
           <h3 className="font-bold text-white text-lg tracking-tight">SUBSCRIBE TO AVENTO ELITE</h3>
           <p className="text-xs text-zinc-500 leading-relaxed">Get private fleet availability updates, special weekend offers, and new luxury release announcements.</p>
         </div>
+        {/* A <form> groups inputs that get "submitted" together. onSubmit runs
+            when the user presses Subscribe. `e` is the event (the click itself);
+            e.preventDefault() cancels the browser's default action of reloading
+            the page, so nothing jumps. Right now it does nothing else — there's
+            no backend wired up to actually save the email yet. */}
         <form onSubmit={(e) => e.preventDefault()} className="flex gap-3 w-full max-w-md">
           <div className="relative flex-1">
             <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            {/* <input> is a typed-in field. type="email" hints it expects an
+                email; placeholder is the faint hint text; `required` stops
+                submission if it's left empty. */}
             <input
               type="email"
               placeholder="Enter your email address"
@@ -67,6 +84,10 @@ export default function Footer() {
           <p className="text-xs leading-relaxed text-zinc-500 max-w-xs">
             A curated collection of elite luxury vehicles, delivering seamless booking experiences and unforgettable journeys wherever the road leads.
           </p>
+          {/* The social icons. These use plain <a> tags (not <Link>) because
+              they point OUTSIDE our app to other websites. <Link> is for jumping
+              between our own pages; <a> is the standard web link for everything
+              else. Each <svg> below is a tiny hand-drawn icon shape. */}
           <div className="flex gap-3 pt-2">
             <a href="https://linkedin.com/in/shubhamya1157" target="_blank" rel="noopener noreferrer" className="h-9 w-9 rounded-xl border border-white/5 bg-white/5 flex items-center justify-center text-zinc-500 hover:text-white hover:border-white/20 hover:scale-105 transition-all duration-300" aria-label="LinkedIn">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -150,6 +171,8 @@ export default function Footer() {
                 <p className="mt-0.5">Mumbai, Maharashtra, India</p>
               </div>
             </a>
+            {/* "tel:" links open the phone dialer on a mobile device.
+                (Similarly, "mailto:" links below open the user's email app.) */}
             <a
               href="tel:+918619815840"
               className="flex items-start gap-3 hover:text-white transition-all duration-300 group"

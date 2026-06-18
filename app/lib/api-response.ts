@@ -9,6 +9,11 @@
 // and saves typing (the "Don't Repeat Yourself" principle).
 // ===========================================================================
 
+// "import" brings in code from elsewhere. NextResponse is a tool from Next.js
+// for building the reply (the "response") that our server sends back to the
+// browser. "JSON" is a simple, universal text format for data — basically
+// labelled values inside curly braces, like { "message": "hello" } — that both
+// the server and the browser understand.
 import { NextResponse } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -22,6 +27,10 @@ import { NextResponse } from "next/server";
 // That sends the browser:  { "message": "Email is required" }  with code 400.
 // ---------------------------------------------------------------------------
 export function apiError(message: string, status: number) {
+  // INPUTS: `message` (the text to show) and `status` (the number code above).
+  // OUTPUT: a ready-to-send response. NextResponse.json(...) packages the
+  // `{ message }` object into JSON and attaches the status code to it.
+  // (`{ message }` is shorthand for `{ message: message }`.)
   return NextResponse.json({ message }, { status });
 }
 

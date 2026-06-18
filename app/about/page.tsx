@@ -2,18 +2,36 @@
 // about/page.tsx — The "/about" page
 // ===========================================================================
 //
-// This whole page is presentational: it just displays text and images, with no
-// data fetching and almost no interactivity. It's built from five small
-// section components defined right here in the file (AboutHero, WhyAvento,
-// StatsSection, VisionSection, AboutCTA), then stacked together at the bottom
-// in the exported AboutPage.
+// In Next.js, a file named page.tsx inside a folder automatically BECOMES a web
+// page. Because this file lives in the "about" folder, it shows up at the web
+// address "/about". You don't wire up any routing by hand — the folder name is
+// the address. (".tsx" = a file that mixes TypeScript code with HTML-like markup
+// called JSX; more on JSX below.)
+//
+// This whole page is "presentational": it just displays text and images, with no
+// data fetching and almost no interactivity. (A "component" is a reusable chunk
+// of screen — think of it like a LEGO brick. You build small bricks, then click
+// them together to make a full page.) This page is built from five small section
+// components defined right here in the file (AboutHero, WhyAvento, StatsSection,
+// VisionSection, AboutCTA), then stacked together at the bottom in the exported
+// AboutPage.
 //
 // Defining each section as its own little function keeps the markup organised
-// and easy to scan. The bulk of each section is Tailwind CSS classes (inside
-// className="...") that handle layout, colours, spacing, and animations.
+// and easy to scan. (A "function" is a named set of instructions you can run;
+// here each function returns a piece of screen to show.) The bulk of each
+// section is Tailwind CSS classes (inside className="...") — Tailwind is a way
+// of styling by typing many tiny class names, where each name sets one thing:
+// e.g. "bg-black" = black background, "text-white" = white text, "p-8" = padding.
+// They handle layout, colours, spacing, and animations. You can mostly IGNORE
+// these long className strings when reading the logic — they only affect looks.
 // ===========================================================================
 
+// "import" pulls in code written elsewhere so we can use it here.
+// Link is Next.js's smart replacement for a normal <a> link: it moves the user
+// between pages of THIS site without a full, slow page reload.
 import Link from "next/link";
+// These are little ready-made icon pictures (an arrow, a shield, a clock, etc.)
+// from the "lucide-react" icon library. We use them like tiny images later.
 import {
   Sparkles,
   ArrowRight,
@@ -22,10 +40,16 @@ import {
   CalendarRange,
   MessageSquare,
 } from "lucide-react";
+// Nav = the top navigation bar; Footer = the strip at the very bottom. Both are
+// shared components defined in their own files, reused on every page.
 import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
 
 // Section 1: AboutHero — the big intro banner with the headline and a photo.
+// This is a function that takes no inputs and "returns" (hands back) a piece of
+// screen. The screen is written as JSX: HTML-like tags such as <section> and
+// <h1> living right inside the code. React reads this JSX and paints it as a
+// real web page. "return ( ... )" means "here is the screen this section shows".
 function AboutHero() {
   return (
     <section className="relative flex items-center overflow-hidden bg-black pt-36 pb-20">
@@ -112,6 +136,10 @@ function AboutHero() {
 
 // Section 2: WhyAvento — four benefit cards. The card contents live in an
 // array, and we loop over it to draw the cards (instead of repeating markup).
+// An "array" is just an ordered list of items, written inside [ ]. Here each
+// item is an object (a labelled bundle of values inside { }) describing one card:
+// its icon, a short tag, a title, and a description. Storing the four cards as
+// data and looping once is far cleaner than copy-pasting the same markup 4 times.
 function WhyAvento() {
   const cards = [
     {
@@ -170,13 +198,22 @@ function WhyAvento() {
         </div>
 
         {/* Benefits Grid — one card per item in the `cards` array above. */}
+        {/* ".map(...)" walks through every item in a list and produces a new
+            thing for each one — here, one card of screen per card of data. It is
+            React's standard way to turn a list of data into a list of visuals.
+            `card` is the current item; `i` is its position number (0, 1, 2, 3). */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {cards.map((card, i) => {
             // Pull the icon component out of the data so we can render it as a
             // tag below. (A capitalised name like `Icon` is required for JSX to
-            // treat it as a component rather than a plain HTML tag.)
+            // treat it as a component rather than a plain HTML tag — lowercase
+            // names like <icon> are read as ordinary HTML, capitalised ones as
+            // your own components.)
             const Icon = card.icon;
             return (
+              // "key" gives each looped item a unique label so React can tell
+              // the cards apart and update them efficiently. It's required on
+              // every list React draws; here we use the position number `i`.
               <div
                 key={i}
                 className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900/60 to-zinc-950/30 p-8 backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:border-white/25"
@@ -187,12 +224,18 @@ function WhyAvento() {
                 {/* Animated top accent line */}
                 <div className="absolute left-0 top-0 h-px w-0 bg-gradient-to-r from-white/70 to-transparent transition-all duration-500 group-hover:w-full" />
 
-                {/* Oversized index number */}
+                {/* Oversized faint index number in the corner. Curly braces { }
+                    inside JSX mean "drop a live value in here". Since `i` counts
+                    from 0, we show 0 followed by i+1, giving "01", "02", "03",
+                    "04" for the four cards. */}
                 <span className="pointer-events-none absolute right-5 top-4 text-6xl font-black leading-none text-white/[0.04] transition-colors duration-500 group-hover:text-white/[0.08]">
                   0{i + 1}
                 </span>
 
-                {/* Icon */}
+                {/* The card's icon picture. <Icon .../> renders whichever icon
+                    this card chose (Clock, Sparkles, Shield, ...). size={22}
+                    passes a setting INTO the icon — a setting passed into a
+                    component like this is called a "prop" (short for property). */}
                 <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/15 to-white/[0.02] text-white transition-all duration-500 group-hover:scale-110 group-hover:border-white/25">
                   <Icon size={22} />
                 </div>
@@ -221,7 +264,8 @@ function WhyAvento() {
 }
 
 // Section 3: StatsSection — four big headline numbers (10K+ rides, etc.),
-// again driven by an array and a loop.
+// again driven by an array and a loop, exactly like WhyAvento above. Each item
+// in `stats` is one number-card: its big value, a label, and a one-line blurb.
 function StatsSection() {
   const stats = [
     {
@@ -256,7 +300,8 @@ function StatsSection() {
         {/* Top Accent Line */}
         <div className="h-px w-full bg-white/10 mb-20" />
 
-        {/* Stats Grid */}
+        {/* Stats Grid — loop over `stats` to draw one card per number.
+            `stat` is the current item, `idx` its position used as the key. */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, idx) => (
             <div
@@ -291,6 +336,8 @@ function StatsSection() {
 }
 
 // Section 4: VisionSection — two large image "pillars" (luxury & performance).
+// Same data-plus-loop idea once more: `pillars` is a 2-item list, and each item
+// carries the small label, big title, description, and which photo to show.
 function VisionSection() {
   const pillars = [
     {
@@ -334,7 +381,8 @@ function VisionSection() {
           </p>
         </div>
 
-        {/* Dual Pillar Visual Grid */}
+        {/* Dual Pillar Visual Grid — loop over the two pillars and draw a tall
+            image card for each. `pillar` is the current item, `index` the key. */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-16">
           {pillars.map((pillar, index) => (
             <div
@@ -343,6 +391,10 @@ function VisionSection() {
             >
               {/* Pillar Image Background */}
               <div className="absolute inset-0 z-0 overflow-hidden rounded-[28px]">
+                {/* `style={{ ... }}` sets a CSS style directly from code (used
+                    here because the image path is dynamic). The backticks `...`
+                    with ${pillar.img} build the text "url('/about-luxury.jpg')",
+                    slotting this pillar's photo path into the middle. */}
                 <div
                   className="absolute inset-0 bg-cover bg-center transition-transform duration-700 scale-100 group-hover:scale-[1.03]"
                   style={{ backgroundImage: `url('${pillar.img}')` }}
@@ -439,6 +491,11 @@ function AboutCTA() {
 
 // The page itself: stack the navigation bar, the five sections in order, and
 // the footer. This is the component Next.js actually renders for "/about".
+// "export default" marks this as the ONE main thing this file hands out — Next.js
+// looks for that default export and shows it as the page.
+// The empty <> ... </> wrapper is a "Fragment": a way to return several elements
+// side by side without adding an extra box around them. (JSX requires a single
+// outer tag, so when you don't want a real wrapper, you use this invisible one.)
 export default function AboutPage() {
   return (
     <>

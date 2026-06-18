@@ -20,9 +20,14 @@
 import { SessionProvider } from 'next-auth/react';
 import React from 'react';
 
-// `children` is whatever this component wraps around — in our case, the entire
-// page. We simply place it inside SessionProvider so the login session flows
-// down to all of it.
+// `children` is a special prop: it's whatever JSX you put BETWEEN this
+// component's opening and closing tags. In our case that's the entire page.
+// The part after the colon — { children: React.ReactNode } — is TypeScript
+// describing the input: "children is React.ReactNode", meaning any drawable
+// content (text, tags, other components). It's just a safety label.
+// We simply place children inside SessionProvider so the login session flows
+// down to all of it. The { } around children switch from JSX into JavaScript so
+// we can drop the value in.
 export default function Providers({ children }: { children: React.ReactNode }) {
   return <SessionProvider>{children}</SessionProvider>;
 }

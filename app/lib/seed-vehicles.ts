@@ -14,6 +14,9 @@
 //      is the shape the rest of the app actually uses.
 // ===========================================================================
 
+// `import type` borrows the data SHAPES we defined in the types.ts file next
+// door (the "./" means "in this same folder"). We only need their shapes here,
+// not real code, which is why it says `import type`.
 import type { Vehicle, VehicleType, Transmission, FuelType } from "./types";
 
 // The shape of one entry in our raw seed list. It's like the full `Vehicle`
@@ -37,19 +40,26 @@ type SeedVehicle = {
 // or edit a car here and it instantly changes across the whole site. Each `{ }`
 // block is one vehicle following the SeedVehicle shape above.
 export const SEED_VEHICLES: SeedVehicle[] = [
+  // --- TEMPLATE CAR (read this one closely) ---------------------------------
+  // Every vehicle below is one object written between { } and separated by a
+  // comma. To ADD a car, copy a whole { ... } block, paste it in, and change
+  // the values. To EDIT one, just change its values. To REMOVE one, delete its
+  // whole block (and its trailing comma). Every block must include all the
+  // fields shown here (except `imagePosition`, which is optional).
   {
-    brand: "Tesla",
-    model: "Model S Plaid",
-    type: "car",
-    image: "/vehicle-tesla.jpg",
-    pricePerDay: 150,
-    description:
+    brand: "Tesla",                  // the maker
+    model: "Model S Plaid",          // the model name
+    type: "car",                     // "car", "bike" or "suv"
+    image: "/vehicle-tesla.jpg",     // photo file inside the public/ folder
+    pricePerDay: 150,                // daily price (just the number)
+    description:                     // the marketing blurb shown on the card
       "Sleek all-electric premium sedan with exceptional range, 1020 horsepower, and autopilot capabilities.",
-    transmission: "Automatic",
-    fuel: "Electric",
-    seats: 5,
-    availability: true,
+    transmission: "Automatic",       // "Automatic" or "Manual"
+    fuel: "Electric",                // "Electric", "Petrol", "Diesel" or "Hybrid"
+    seats: 5,                        // number of seats
+    availability: true,              // true = bookable, false = unavailable
   },
+  // --- The remaining cars all follow the EXACT same shape as above. ----------
   {
     brand: "Ducati",
     model: "Panigale V4",

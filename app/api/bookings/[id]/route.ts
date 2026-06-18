@@ -30,6 +30,8 @@ export async function PATCH(
     }
 
     // Get the id from the URL and the requested new status from the body.
+    // `await req.json()` reads the JSON the browser sent and turns that text
+    // into an object; we then pull out the `status` field it contains.
     const { id } = await context.params;
     const { status } = await req.json();
 
@@ -49,6 +51,9 @@ export async function PATCH(
     // SECURITY CHECK: make sure this booking belongs to the logged-in user, so
     // nobody can cancel someone else's booking by guessing its id. 403 means
     // "Forbidden" — we know who you are, but you're not allowed to do this.
+    // `.toString()` turns the stored id (a special database object) into plain
+    // text so it can be fairly compared with the logged-in user's id text.
+    // `!==` means "is NOT exactly equal to".
     if (booking.userId.toString() !== session.user.id) {
       return apiError("Unauthorized to update this booking", 403);
     }

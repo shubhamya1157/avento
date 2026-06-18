@@ -19,6 +19,10 @@
 // pattern is called "connection caching".
 // ===========================================================================
 
+// "import" pulls in code from another package. Here we bring in "mongoose" (the
+// helper library for talking to MongoDB) and, in the curly braces, a TypeScript
+// "type" called Connection. A type is just a label that describes the shape of a
+// value, so the editor can warn us early if we use it wrongly.
 import mongoose, { Connection } from "mongoose";
 
 // ---------------------------------------------------------------------------
@@ -88,6 +92,11 @@ async function connectDB(): Promise<Connection> {
   //    arrive at the same time, they both wait on the SAME attempt instead of
   //    each opening their own connection.
   if (!cached!.promise) {
+    // mongoose.connect(...) starts dialing the database and hands back a promise
+    // (the "receipt" mentioned above). `.then(...)` says "once that receipt is
+    // cashed in and we get the result, take that result (`instance`) and give
+    // back just the `.connection` part of it." We store this whole in-progress
+    // promise so others can wait on it.
     cached!.promise = mongoose
       .connect(connectionString)
       .then((instance) => instance.connection);

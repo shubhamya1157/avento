@@ -18,7 +18,15 @@
 // app running on many servers, you'd swap this for Redis or a database table.
 // ===========================================================================
 
-// The shape of one stored OTP entry.
+// The shape of one stored OTP entry. An "interface" is a TypeScript blueprint:
+// it lists the fields a value must have and what type each field is (text,
+// number, etc.). It's a checklist the editor uses to catch mistakes — it adds
+// no code that actually runs.
+//
+// "epoch milliseconds" (used below) is a common way to write a moment in time:
+// it's the number of milliseconds that have passed since midnight on Jan 1,
+// 1970. Bigger number = later moment. It makes comparing two times as easy as
+// comparing two plain numbers.
 interface OtpEntry {
   otp: string;       // the 6-digit code
   expiresAt: number; // the moment it stops being valid, as epoch milliseconds
@@ -50,6 +58,11 @@ const MAX_ATTEMPTS = 3;            // lock the code after 3 wrong guesses
 // ---------------------------------------------------------------------------
 /** Save an OTP for an email (valid for 10 minutes). */
 export function saveOtp(email: string, otp: string): void {
+  // INPUTS: the user's `email` and the freshly made `otp` code. OUTPUT: nothing
+  // useful (`void` means "returns no value") — it just records the code.
+  // `store.set(key, value)` adds (or overwrites) an entry in the Map.
+  // `Date.now()` gives the current time as epoch milliseconds; adding
+  // OTP_TTL_MS sets the expiry to exactly 10 minutes from now.
   store.set(email, {
     otp,
     expiresAt: Date.now() + OTP_TTL_MS, // now + 10 minutes

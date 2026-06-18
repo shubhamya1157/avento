@@ -1,36 +1,84 @@
+// ===========================================================================
+// tsconfig.json — The settings file for TypeScript
+// ===========================================================================
+//
+// TypeScript is JavaScript with "types" added: extra labels that say what kind
+// of value each thing is (text, number, etc.), so mistakes get caught while you
+// write rather than after the site is live. This file (a "config", i.e. a
+// settings file) tells TypeScript how to check this project.
+//
+// (Normal JSON files can't have comments, but TypeScript's tooling specifically
+// allows `//` comments in tsconfig.json — so these notes are safe here.)
+// ===========================================================================
 {
+  // "compilerOptions" = the main knobs that control how TypeScript checks and
+  // understands the code.
   "compilerOptions": {
+    // Which version of JavaScript features the code targets. ES2017 is a widely
+    // supported baseline that all modern browsers understand.
     "target": "ES2017",
+    // "lib" lists the built-in feature descriptions to assume are available.
+    // "dom"/"dom.iterable" = browser things (the page, buttons, etc.);
+    // "esnext" = the newest JavaScript language features.
     "lib": ["dom", "dom.iterable", "esnext"],
+    // Allow plain ".js" files in the project too, not only TypeScript files.
     "allowJs": true,
+    // Skip type-checking inside installed libraries (the node_modules folder).
+    // This makes checking much faster and trusts that libraries are correct.
     "skipLibCheck": true,
+    // Turn on all the strict, careful checks. Catches the most mistakes — the
+    // recommended setting for new projects.
     "strict": true,
+    // Don't output compiled JavaScript files. Next.js does the actual building;
+    // here TypeScript is used only to check for errors.
     "noEmit": true,
+    // Smooth over differences between the two ways files share code, so older
+    // and newer "import" styles work together without fuss.
     "esModuleInterop": true,
+    // A "module" is a single code file that can share parts with other files.
+    // "esnext" means use the modern import/export syntax.
     "module": "esnext",
+    // How TypeScript figures out where an imported file actually lives.
+    // "bundler" matches how modern build tools (like Next.js) resolve files.
     "moduleResolution": "bundler",
+    // The starting folder for resolving non-relative imports. "." = this folder
+    // (the project root). Works together with "paths" below.
     "baseUrl": ".",
+    // Allow importing ".json" files directly as data in the code.
     "resolveJsonModule": true,
+    // Require each file to be understandable on its own. Needed by the fast,
+    // file-by-file build tools this project uses.
     "isolatedModules": true,
+    // How to handle JSX (the HTML-like syntax used in React components).
+    // "react-jsx" is the modern mode that needs no extra React import.
     "jsx": "react-jsx",
+    // Remember results between checks so re-checking is faster next time.
     "incremental": true,
+    // Extra add-ons. The "next" plugin gives smarter, Next.js-aware help in the
+    // code editor.
     "plugins": [
       {
         "name": "next"
       }
     ],
+    // Shortcuts for import paths. "@/something" means "start from the project
+    // root", so you can write "@/app/auth" instead of long "../../" chains.
     "paths": {
       "@/*": ["./*"]
     }
   },
+  // "include" = which files TypeScript should look at. The "**/*" patterns mean
+  // "any file with this ending, in any folder".
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.d.ts",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "next-env.d.ts",            // Next.js's auto-generated type file
+    "**/*.ts",                  // all TypeScript files
+    "**/*.tsx",                 // all TypeScript files that contain JSX (React)
+    "**/*.d.ts",                // all "declaration" files (types only, no code)
+    ".next/types/**/*.ts",      // types Next.js generates during a build
+    ".next/dev/types/**/*.ts",  // types Next.js generates while developing
+    "**/*.mts"                  // module TypeScript files (the ".mts" ending)
   ],
+  // "exclude" = folders to ignore. We skip "node_modules" (the installed
+  // libraries) because we don't need to re-check other people's code.
   "exclude": ["node_modules"]
 }

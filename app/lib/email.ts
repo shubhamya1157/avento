@@ -12,6 +12,9 @@
 // us. Those secret credentials live in environment variables, never in code.
 // ===========================================================================
 
+// "import" brings in code from another package so we can use it. "nodemailer"
+// is a library (a bundle of shared, ready-made code) that knows how to send
+// email for us, so we don't have to write all that low-level machinery.
 import nodemailer from "nodemailer";
 
 // ---------------------------------------------------------------------------
@@ -34,6 +37,14 @@ const transporter = nodemailer.createTransport({
 // caller — the send-otp route — turns that into an error response).
 // ---------------------------------------------------------------------------
 export async function sendOTPEmail(email: string, otp: string) {
+  // INPUTS: `email` (where to send) and `otp` (the 6-digit code to include).
+  // Both are typed `string`, meaning they must be text. "async" (explained
+  // again here for convenience) means this function does slow network work and
+  // can "await" it.
+  //
+  // A "try / catch" is a safety net: the app TRIES the risky steps inside `try`,
+  // and IF any of them fails (throws an error), it jumps straight to the `catch`
+  // block instead of crashing the whole program.
   try {
     // mailOptions describes the message: who it's from, who it's to, the
     // subject line, and the body. Here the body is `html`, so it can be styled

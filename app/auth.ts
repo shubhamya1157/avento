@@ -17,18 +17,28 @@
 // looking you up in the database each time.
 // ===========================================================================
 
+// "import" means "bring in code that lives in another file or library so we can
+// use it here". Each line below grabs one tool. A "library" (also called a
+// package or module) is a bundle of ready-made code someone else wrote and
+// shared, so we don't have to build everything from scratch.
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";          // library for safely checking passwords
-import connectDB from "./lib/db";
-import userModel from "./models/user";
+import connectDB from "./lib/db";       // our own helper that opens the database
+import userModel from "./models/user";  // our description of what a "user" looks like in the database
 
-// NextAuth(...) hands back several ready-made tools. We export them so other
-// files can use them:
-//   - handlers: the API endpoints that the browser talks to during login
+// NextAuth(...) hands back several ready-made tools. "export" is the opposite of
+// "import": it marks these tools as shareable, so OTHER files are allowed to
+// import them. A "session" is the period during which you stay logged in — from
+// the moment you sign in until you sign out (or it expires). We export:
+//   - handlers: the API endpoints (web addresses) the browser talks to during login
 //   - signIn / signOut: functions to start/end a session
 //   - auth: a function to ask "who is logged in right now?" on the server
+//
+// The `{ handlers, signIn, signOut, auth } = ...` part is called "destructuring":
+// NextAuth returns one big object, and this syntax unpacks four named pieces out
+// of it into their own variables in a single line.
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     // -----------------------------------------------------------------------
@@ -44,6 +54,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // `authorize` runs when someone submits the login form. Its job: decide
       // whether the email/password are correct. Return a user object to allow
       // login, or throw an error to reject it.
+      //
+      // "async" marks a function that does slow work (like asking the database,
+      // which takes time over the network). An async function can use "await",
+      // which means "pause right here and wait for this slow step to finish
+      // before moving to the next line", without freezing the whole app.
       async authorize(credentials) {
         // Guard: both fields must be filled in.
         if (!credentials?.email || !credentials?.password) {
@@ -92,6 +107,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // PROVIDER 2: Google login. NextAuth handles the whole Google popup flow;
     // we just supply our app's Google ID and secret (kept in env variables).
     // -----------------------------------------------------------------------
+    // "process.env" is how we read "environment variables" — secret settings
+    // (passwords, keys, addresses) kept OUTSIDE the code, usually in a hidden
+    // .env file. We keep secrets out of the code so they never get shared by
+    // accident. The `?? ""` means: if the secret is missing, use an empty text
+    // instead of crashing.
     Google({
       clientId: process.env.AUTH_GOOGLE_ID ?? "",
       clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
@@ -100,7 +120,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
   // -------------------------------------------------------------------------
   // CALLBACKS: small functions NextAuth calls at key moments, letting us add
-  // our own custom logic. They run in this order during a login.
+  // our own custom logic. A "callback" is a function you hand to a library and
+  // say "you call this back for me when the right moment arrives" — like leaving
+  // your phone number so someone rings you when your table is ready. They run in
+  // this order during a login.
   // -------------------------------------------------------------------------
   callbacks: {
     // Runs right after a provider approves a login. Returning true allows the

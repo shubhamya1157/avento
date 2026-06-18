@@ -8,10 +8,13 @@
 // vehicle record to point at — see app/api/bookings/route.ts.)
 // ===========================================================================
 
+// `import` pulls in code from another package. `mongoose` is the library that
+// connects our app to the MongoDB database and lets us define schemas/models.
 import mongoose from "mongoose";
 
 // ---------------------------------------------------------------------------
-// TypeScript shape of a vehicle. The fields like
+// TypeScript shape of a vehicle. (An "interface" is just a checklist of which
+// fields exist and what kind of value each holds.) The fields like
 //   type: "car" | "bike" | "suv"
 // are called "union types" — they mean the value must be EXACTLY one of those
 // listed words, nothing else. This prevents typos like "Car" or "scooter".

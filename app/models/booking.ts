@@ -9,8 +9,16 @@
 // and link to it from elsewhere.
 // ===========================================================================
 
+// `mongoose` is the library that lets our code read from and write to the
+// MongoDB database. `Document` is mongoose's type for "one saved record"; by
+// writing `extends Document` below, a booking inherits mongoose's built-in
+// fields (such as the auto-generated `_id`) on top of our own fields.
 import mongoose, { Document } from "mongoose";
 
+// ---------------------------------------------------------------------------
+// The TypeScript shape of one booking (an "interface" is a checklist of the
+// fields a booking must have and the kind of value each one holds).
+// ---------------------------------------------------------------------------
 export interface BookingType extends Document {
     // ObjectId is MongoDB's special id type. `ref` (set in the schema below)
     // says WHICH collection this id points into, so we can later "populate"
@@ -20,9 +28,16 @@ export interface BookingType extends Document {
     startDate: Date;     // first day of the rental
     endDate: Date;       // last day of the rental
     totalAmount: number; // price for the whole period (days × pricePerDay)
+    // The `|` here is a "union type": status must be EXACTLY one of these
+    // three words. pending = awaiting action, confirmed = locked in,
+    // cancelled = called off.
     status: "pending" | "confirmed" | "cancelled";
 }
 
+// ---------------------------------------------------------------------------
+// The schema — the database rulebook for a booking. `required: true` means the
+// field MUST be filled in, and `enum` lists the only allowed values.
+// ---------------------------------------------------------------------------
 const bookingSchema = new mongoose.Schema<BookingType>(
     {
         userId: {

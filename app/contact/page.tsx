@@ -2,24 +2,39 @@
 // contact/page.tsx — The "/contact" page: contact info, a form, and FAQs
 // ===========================================================================
 //
+// Like every page.tsx, the folder name ("contact") becomes the web address, so
+// this shows at "/contact".
+//
 // This page lets a visitor send a message and read frequently asked questions.
-// It's interactive, so it needs state:
+// It's interactive, so it needs "state". State is a component's MEMORY: values
+// the page remembers, and when they change the screen automatically redraws to
+// match. (Think of state like the number on a scoreboard — change the number and
+// the display updates by itself.) This page remembers:
 //   - formState: holds every field of the contact form in one object.
 //   - isSubmitting / submitted: control the button spinner and the thank-you
 //     screen after sending.
-//   - openFaq: which FAQ item is currently expanded (an accordion).
+//   - openFaq: which FAQ item is currently expanded (an "accordion" = a list of
+//     rows where clicking a row slides its answer open, like a folding ladder).
 //
 // NOTE: the form doesn't really email anyone yet — handleSubmit just waits 1.5s
 // to mimic a network request, then shows the success screen. Wiring it to a
 // real backend would be the next step.
 // ===========================================================================
 
+// "use client" tells Next.js this page runs in the visitor's BROWSER, not only
+// on the server. Pages that remember state or respond to clicks need to be
+// "client" components, so any interactive page starts with this line.
 "use client";
 
+// useState is a "hook" — a special helper function from React whose name starts
+// with "use". This one creates a piece of state (a remembered value) for us.
 import { useState } from "react";
 import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
+// framer-motion is an animation library. `motion` makes elements that can slide
+// and fade; `AnimatePresence` animates them nicely as they appear/disappear.
 import { motion, AnimatePresence } from "framer-motion";
+// Icon pictures used around the page (email, phone, map pin, etc.).
 import {
   Mail,
   Phone,
@@ -32,7 +47,14 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+// "export default" = the one main thing this file hands out; Next.js renders it
+// as the /contact page.
 export default function ContactPage() {
+  // useState gives back a PAIR: [the current value, a function to change it].
+  // The "const [a, b] = ..." syntax just names both halves of that pair at once.
+  // So formState = the current value; setFormState = the only correct way to
+  // change it (changing it via setFormState is what triggers a redraw).
+  //
   // All five form fields live together in one state object. To update just one,
   // we spread the old object and overwrite that single key (see the inputs).
   const [formState, setFormState] = useState({
@@ -42,10 +64,12 @@ export default function ContactPage() {
     subject: "",
     message: "",
   });
+  // Two simple true/false memories. useState(false) means "start out false".
   const [isSubmitting, setIsSubmitting] = useState(false); // true while "sending"
   const [submitted, setSubmitted] = useState(false);       // true once sent
-  // Which FAQ is open. `number | null`: an index, or null when all are closed.
-  // It starts at 0, so the first question is open by default.
+  // Which FAQ is open. The "<number | null>" is TypeScript saying this value is
+  // either a number (a position/index) OR null (nothing open). It starts at 0,
+  // so the first question is open by default.
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   // The FAQ content, kept as an array so we can loop over it to draw the list.
@@ -73,16 +97,26 @@ export default function ContactPage() {
     },
   ];
 
-  // Handle the form submission. Right now it FAKES a server call: it shows the
-  // spinner, waits 1.5 seconds, then switches to the success screen.
-  //   new Promise + setTimeout = "pause here for 1500 milliseconds".
+  // Handle the form submission. This runs when the visitor presses "Send".
+  // Right now it FAKES a server call: it shows the spinner, waits 1.5 seconds,
+  // then switches to the success screen.
+  //
+  // "async" marks a function that does slow work (like waiting or talking to a
+  // server) without freezing the page. Inside an async function, "await" means
+  // "pause right here until this finishes, then continue". A "Promise" is a
+  // stand-in for a result that isn't ready yet — like a pizza order ticket you
+  // hold while the pizza cooks. Here, new Promise + setTimeout makes a promise
+  // that finishes after 1500 milliseconds (1.5 seconds), so "await" simply
+  // pauses for 1.5s.
+  //   - Input: e, the form's submit event (carries info about what happened).
+  //   - Output: nothing returned; it just updates state to drive the screen.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // stop the browser's default page reload on submit
-    setIsSubmitting(true);
-    // Simulate api submission
+    setIsSubmitting(true);   // flip to "sending..." (button shows a busy label)
+    // Simulate api submission (pretend we sent the message to a server).
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    setSubmitted(true);
+    setIsSubmitting(false);  // done waiting
+    setSubmitted(true);      // show the thank-you screen
   };
 
   return (
@@ -222,7 +256,12 @@ export default function ContactPage() {
           </div>
 
           {/* Send Message Form Section. We show the FORM until `submitted` is
-              true, then swap it for a thank-you message (the ternary below). */}
+              true, then swap it for a thank-you message (the ternary below).
+              A "ternary" is a compact if/else written as: condition ? A : B —
+              read it as "if condition then A, otherwise B". Below, the condition
+              is !submitted ("not submitted yet"): if true show the form, else (B,
+              after the ":" far down) show the success screen. The "!" means
+              "not", so !submitted is true while the message has NOT been sent. */}
           <div className="mt-16 max-w-4xl mx-auto">
             <div className="rounded-3xl border border-white/5 bg-zinc-900/25 p-8 md:p-12 backdrop-blur-md relative">
               {!submitted ? (
@@ -233,16 +272,26 @@ export default function ContactPage() {
                     you shortly.
                   </p>
 
+                  {/* <form>'s onSubmit runs our handleSubmit when the user
+                      presses Send (or hits Enter). "onSubmit={...}" wires the
+                      event to the function. */}
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-1.5">
                         <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
                           Full Name
                         </label>
-                        {/* Each input updates ONE key of formState. The trick
+                        {/* Each input updates ONE key of formState. The "..."
+                            is the "spread" operator: it pours all the existing
+                            fields into a fresh object. So
                             { ...formState, name: e.target.value } means: copy
-                            every existing field, then overwrite just `name`. The
-                            other four inputs follow the same pattern. */}
+                            every existing field, then overwrite just `name`. We
+                            must build a brand-new object (not edit the old one)
+                            because that's how React notices a change and redraws.
+                            "value=..." keeps the box showing the stored text, and
+                            "onChange" fires on every keystroke; e.target.value is
+                            whatever the user has typed. The other four inputs
+                            follow the exact same pattern. */}
                         <input
                           type="text"
                           required
@@ -334,11 +383,16 @@ export default function ContactPage() {
                       />
                     </div>
 
+                    {/* "disabled={isSubmitting}" greys out the button (and blocks
+                        extra clicks) while the fake send is in progress. */}
                     <button
                       type="submit"
                       disabled={isSubmitting}
                       className="w-full rounded-xl bg-white py-4.5 text-xs font-bold text-black hover:bg-zinc-200 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2 cursor-pointer mt-6"
                     >
+                      {/* Another ternary: while sending, show the text
+                          "Sending Message..."; otherwise show "Send Message" plus
+                          the little Send icon. */}
                       {isSubmitting ? (
                         "Sending Message..."
                       ) : (
@@ -351,6 +405,8 @@ export default function ContactPage() {
                   </form>
                 </div>
               ) : (
+                /* The ":" branch of the form/thank-you ternary: this shows once
+                   `submitted` is true — the success message and a reset button. */
                 <div className="py-16 text-center space-y-4">
                   <div className="mx-auto h-16 w-16 bg-white/10 border border-white/10 rounded-full flex items-center justify-center text-white">
                     <CheckCircle size={32} />
@@ -362,6 +418,9 @@ export default function ContactPage() {
                     Thank you for reaching out. We have received your message
                     and an Avento representative will get back to you shortly.
                   </p>
+                  {/* "Send Another Message": onClick runs this little function,
+                      which flips submitted back to false (showing the form again)
+                      and blanks out all five fields so it's fresh and empty. */}
                   <button
                     onClick={() => {
                       setSubmitted(false);
@@ -393,10 +452,13 @@ export default function ContactPage() {
               </h2>
             </div>
 
-            {/* The FAQ accordion: loop over `faqs` and draw one expandable row
-                each. A row is "open" when its index matches `openFaq`. */}
+            {/* The FAQ accordion: loop over `faqs` with .map and draw one
+                expandable row each. A row is "open" when its index matches the
+                remembered `openFaq` value. */}
             <div className="space-y-4">
               {faqs.map((faq, index) => {
+                // isOpen is true only for the row whose position equals openFaq.
+                // "===" is an exact "is it equal?" check that returns true/false.
                 const isOpen = openFaq === index;
                 return (
                   <div
@@ -416,13 +478,18 @@ export default function ContactPage() {
                       />
                     </button>
 
+                    {/* "isOpen && (...)" is a shortcut: only draw the part after
+                        && when isOpen is true. So the answer panel exists only
+                        while this row is open. AnimatePresence + motion.div make
+                        it smoothly slide open (initial -> animate) and slide shut
+                        (exit) instead of popping in and out. */}
                     <AnimatePresence initial={false}>
                       {isOpen && (
                         <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.25 }}
+                          initial={{ height: 0, opacity: 0 }}    /* start: collapsed + invisible */
+                          animate={{ height: "auto", opacity: 1 }} /* open: full height + visible */
+                          exit={{ height: 0, opacity: 0 }}        /* closing: back to collapsed */
+                          transition={{ duration: 0.25 }}         /* take 0.25s */
                         >
                           <div className="px-5 pb-5 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/[0.02]">
                             {faq.answer}

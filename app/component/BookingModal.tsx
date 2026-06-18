@@ -14,8 +14,14 @@
 //   - BookingModal:  the backdrop/open-close wrapper (plus the login fallback).
 // ===========================================================================
 
+// "use client" means this file runs in the visitor's browser, which it must,
+// because it responds to date picking, clicks, and form submission.
 'use client';
 
+// `useMemo` and `useState` are React "hooks" — special helper functions (their
+// names start with "use") that a component can call. `useState` remembers a
+// value between redraws; `useMemo` remembers the RESULT of a calculation so it
+// isn't redone needlessly. More on each where they're used below.
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -62,6 +68,8 @@ function BookingForm({
   onClose: () => void;
   onLoginRequired: () => void; // called when a logged-out user tries to book
 }) {
+  // `useSession` is NextAuth's hook that tells us about the logged-in user.
+  // `session` is their info if logged in, or null if logged out.
   const { data: session } = useSession(); // who's logged in (or null)
   const defaults = getDefaultDates();
   const [startDate, setStartDate] = useState(defaults.startDate);
@@ -92,8 +100,15 @@ function BookingForm({
 
   // ------------------------------------------------------------------------
   // Submit handler: validate, then POST the booking to our API.
+  //
+  // `async` lets this function pause for slow work without freezing the page;
+  // `await` is that pause, waiting for the server's reply (a "promise", i.e. a
+  // result that isn't ready yet) before continuing. `fetch` is how the browser
+  // sends a request to a web address. "POST" means "here is some data to save".
   // ------------------------------------------------------------------------
   const handleSubmit = async (e: React.FormEvent) => {
+    // A form submit normally reloads the page; preventDefault() stops that so
+    // our own code can handle the booking instead.
     e.preventDefault();
 
     // Not logged in? Don't book — trigger the login popup instead.
@@ -300,6 +315,9 @@ function BookingForm({
           disabled={loading || days <= 0}
           className="flex w-2/3 items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-sm font-bold text-black transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
         >
+          {/* A chained "ternary" (condition ? A : B, a short if/else): show a
+              spinner while loading, else "Login to Book" if logged out, else
+              the normal "Confirm Reservation" label. */}
           {loading ? (
             <Loader2 size={18} className="animate-spin" />
           ) : !session ? (
