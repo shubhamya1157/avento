@@ -18,6 +18,10 @@ export type VehicleType = "car" | "bike" | "suv";
 export type Transmission = "Automatic" | "Manual";
 export type FuelType = "Electric" | "Petrol" | "Diesel" | "Hybrid";
 export type BookingStatus = "pending" | "confirmed" | "cancelled";
+// Where a vehicle came from, and how far through approval it is. A partner
+// submission is only shown to renters once an admin marks it "approved".
+export type VehicleSource = "fleet" | "partner";
+export type ApprovalStatus = "approved" | "pending" | "rejected";
 
 // ---------------------------------------------------------------------------
 // A vehicle as the frontend sees it (e.g. a card on the /vehicles page).
@@ -46,6 +50,48 @@ export interface Vehicle {
   // when a photo needs to be cropped higher or lower than the default.
   // The `?` means this field may be absent for most vehicles.
   imagePosition?: string;
+
+  // A quick star-rating summary the API works out from this vehicle's reviews,
+  // so cards can show "4.5 ★ (12)" without each fetching reviews separately.
+  // `average` is the mean rating (0 when there are no reviews yet) and `count`
+  // is how many reviews there are. Optional because the static seed list and
+  // older API responses don't include it.
+  rating?: {
+    average: number; // mean rating, 1 decimal place (0 = no reviews yet)
+    count: number;   // how many reviews this vehicle has
+  };
+
+  // --- Partner / approval fields (present only on partner-supplied vehicles) ---
+  source?: VehicleSource;     // "fleet" (house) or "partner" (submitted by a user)
+  status?: ApprovalStatus;    // "approved" / "pending" / "rejected"
+  ownerName?: string;         // partner's contact name
+  ownerPhone?: string;        // partner's contact phone
+  licensePlate?: string;      // number plate / registration
+  location?: string;          // where the vehicle is based
+  adminNote?: string;         // admin's note (e.g. reason a request was rejected)
+  images?: string[];          // extra gallery photos beyond the cover image
+  createdAt?: string;         // when it was submitted (used in the partner/admin lists)
+}
+
+// ---------------------------------------------------------------------------
+// What the partner submission form sends to the server when listing a vehicle.
+// (It's the renter-facing vehicle details PLUS the owner's personal details.)
+// ---------------------------------------------------------------------------
+export interface PartnerVehicleInput {
+  brand: string;
+  model: string;
+  type: VehicleType;
+  image: string;              // cover photo (an uploaded URL)
+  images?: string[];          // extra gallery photos
+  pricePerDay: number;
+  description: string;
+  transmission: Transmission;
+  fuel: FuelType;
+  seats: number;
+  ownerName: string;          // the partner's own name
+  ownerPhone: string;         // the partner's contact phone
+  licensePlate: string;       // the vehicle's registration plate
+  location: string;           // where the vehicle is based
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +100,7 @@ export interface Vehicle {
 // show the booking card without sending the entire vehicle record.
 // ---------------------------------------------------------------------------
 export interface BookingVehicle {
+  _id: string;         // the vehicle's id — needed to leave a review for it
   brand: string;       // car maker, e.g. "Tesla"
   model: string;       // specific model, e.g. "Model S Plaid"
   image: string;       // path to the photo to show on the booking card
@@ -73,5 +120,28 @@ export interface Booking {
   endDate: string;
   totalAmount: number; // full price for the whole rental period
   status: BookingStatus; // "pending", "confirmed" or "cancelled"
+  paid?: boolean;      // true once a real Razorpay payment was taken (false in demo mode)
   createdAt: string;   // when the booking was made ("Booked On")
+}
+
+// ---------------------------------------------------------------------------
+// A review as the frontend sees it (a star rating + comment for a vehicle).
+// Mirrors app/models/review.ts. The API's GET /api/reviews returns a list of
+// these plus a summary (see ReviewSummary below).
+// ---------------------------------------------------------------------------
+export interface Review {
+  _id: string;        // this review's own unique id
+  vehicleId: string;  // which vehicle it's about
+  userName: string;   // the reviewer's display name (copied onto the review)
+  rating: number;     // a whole number of stars, 1 to 5
+  comment?: string;   // the written review (optional)
+  createdAt: string;  // when it was written
+}
+
+// What GET /api/reviews returns: the list plus a quick summary the UI can show
+// (e.g. "4.5 ★ from 12 reviews") without re-computing it in the browser.
+export interface ReviewSummary {
+  reviews: Review[];
+  count: number;   // how many reviews there are
+  average: number; // mean rating rounded to 1 decimal (0 when there are none)
 }

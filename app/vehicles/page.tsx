@@ -30,7 +30,7 @@ import type { Vehicle } from "@/app/lib/types";
 // instantly before the live data arrives from the server.
 import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
 import { motion, AnimatePresence } from "framer-motion";
-import { Car, Zap, Users } from "lucide-react";
+import { Car, Zap, Users, Star } from "lucide-react";
 
 // The filter options, as a fixed list. `as const` freezes this array so its
 // values are treated as the exact strings "all" | "car" | "bike" | "suv", not
@@ -196,6 +196,27 @@ export default function VehiclesPage() {
                           {vehicle.brand}{" "}
                           <span className="font-normal text-zinc-400">{vehicle.model}</span>
                         </h3>
+
+                        {/* Star rating, read from the summary the API attaches to
+                            each vehicle. If there are reviews we show the average
+                            (a filled star + e.g. "4.5") and the count in brackets;
+                            with none yet we show a muted "No reviews yet" so the
+                            row never looks broken or empty. */}
+                        {vehicle.rating && vehicle.rating.count > 0 ? (
+                          <span className="mt-1.5 flex items-center gap-1 text-xs text-zinc-300">
+                            <Star size={13} className="fill-amber-400 text-amber-400" />
+                            <span className="font-semibold">{vehicle.rating.average}</span>
+                            <span className="text-zinc-500">
+                              ({vehicle.rating.count}{" "}
+                              {vehicle.rating.count === 1 ? "review" : "reviews"})
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="mt-1.5 flex items-center gap-1 text-xs text-zinc-600">
+                            <Star size={13} className="text-zinc-600" />
+                            No reviews yet
+                          </span>
+                        )}
                       </div>
 
                       {/* line-clamp-2 cuts the description to 2 lines max */}

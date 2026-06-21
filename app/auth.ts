@@ -27,6 +27,7 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";          // library for safely checking passwords
 import connectDB from "./lib/db";       // our own helper that opens the database
 import userModel from "./models/user";  // our description of what a "user" looks like in the database
+import { isAdminEmail } from "./lib/roles"; // tells us if an email is in the ADMIN_EMAILS list
 
 // NextAuth(...) hands back several ready-made tools. "export" is the opposite of
 // "import": it marks these tools as shareable, so OTHER files are allowed to
@@ -92,13 +93,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Invalid password");
         }
 
+        // If this email is in our ADMIN_EMAILS list but the database still has
+        // them as a normal user, promote them to "admin" right now and save it.
+        // This means the very first admin is created just by logging in — no
+        // manual database editing required.
+        let role = user.role;
+        if (isAdminEmail(email) && role !== "admin") {
+          user.role = "admin";
+          await user.save();
+          role = "admin";
+        }
+
         // Success! Return the (safe, non-secret) fields to put in the session.
         // Notice we never return the password.
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          role: user.role,
+          role,
         };
       },
     }),
@@ -136,13 +148,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (account?.provider === "google") {
         await connectDB();
 
+        // Decide their starting role: "admin" if the email is in ADMIN_EMAILS,
+        // otherwise the normal "user".
+        const role = isAdminEmail(user.email) ? "admin" : "user";
+
         const existingUser = await userModel.findOne({ email: user.email });
         if (!existingUser) {
           await userModel.create({
             name: user.name ?? "Google User",
             email: user.email,
-            role: "user",
+            role,
           });
+        } else if (role === "admin" && existingUser.role !== "admin") {
+          // They already had an account but were just added to ADMIN_EMAILS —
+          // bump their stored role up to admin so the database stays in sync.
+          existingUser.role = "admin";
+          await existingUser.save();
         }
       }
 
@@ -157,6 +178,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? token.role;
       }
+
+      // Safety net: no matter how they logged in (Google profiles, for example,
+      // don't carry our role), if their email is in ADMIN_EMAILS the wristband
+      // always says "admin". This keeps admin access reliable.
+      if (isAdminEmail(token.email)) {
+        token.role = "admin";
+      }
+
       return token;
     },
 

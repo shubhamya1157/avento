@@ -35,10 +35,16 @@ import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
 // AuthModal = the pop-up login/signup window shown when a guest must sign in.
 import AuthModal from "@/app/component/AuthModal";
+// The little "rate this ride" widget shown on each non-cancelled booking.
+import ReviewControl from "@/app/component/ReviewControl";
 // "import type" brings in only a TYPE description (the shape of a Booking), used
 // by TypeScript to check our data. It vanishes when the app actually runs.
 import type { Booking } from "@/app/lib/types";
-import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle } from "lucide-react";
+// The live chat panel for talking to the vehicle's owner about a booking.
+import BookingChat from "@/app/component/BookingChat";
+// The live video call / KYC panel for the same booking.
+import VideoCall from "@/app/component/VideoCall";
+import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle, MessageSquare, Video, Navigation } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Helper: turn a stored date string into a friendly label like "Jun 16, 2026".
@@ -81,6 +87,10 @@ export default function BookingsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null); // which booking is mid-cancel
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false); // login popup open?
+  // The booking whose chat panel is open (null = no chat showing).
+  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  // The booking whose video call is open (null = no call showing).
+  const [call, setCall] = useState<{ id: string; title: string } | null>(null);
 
   // useEffect lets us run some code AFTER the page draws, and again whenever a
   // value we depend on changes. The list at the very end — [status] — is the
@@ -348,15 +358,60 @@ export default function BookingsPage() {
                                 <span className="font-semibold text-zinc-200">{formatDate(booking.createdAt)}</span>
                               </div>
                             </div>
+
+                            {/* Let the user rate a ride they actually took. Only
+                                shown for non-cancelled bookings whose vehicle is
+                                still known (we need its id to post the review). */}
+                            {!isCancelled && vehicle && (
+                              <ReviewControl
+                                vehicleId={vehicle._id}
+                                vehicleName={`${vehicle.brand} ${vehicle.model}`}
+                              />
+                            )}
                           </div>
 
-                          {/* Only show the Cancel button when the booking is
-                              NOT already cancelled ("!isCancelled &&"). */}
-                          {!isCancelled && (
-                            <div className="flex w-full shrink-0 justify-end md:w-auto">
-                              {/* onClick cancels THIS booking by its id. The
-                                  button disables itself while this exact row is
-                                  mid-cancel (cancellingId matches its id). */}
+                          {/* Action buttons. "Message" opens the live chat with
+                              the vehicle's owner (always available). "Cancel Ride"
+                              only shows while the booking isn't already cancelled. */}
+                          <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
+                            <button
+                              onClick={() =>
+                                setChat({
+                                  id: booking._id,
+                                  title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
+                                })
+                              }
+                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <MessageSquare size={14} /> Message
+                            </button>
+
+                            {/* "Video" starts a live video call / KYC with the
+                                vehicle's owner (always available). */}
+                            <button
+                              onClick={() =>
+                                setCall({
+                                  id: booking._id,
+                                  title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
+                                })
+                              }
+                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <Video size={14} /> Video
+                            </button>
+
+                            {/* "Track trip" opens the live map for this booking. */}
+                            <Link
+                              href={`/trip/${booking._id}`}
+                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <Navigation size={14} /> Track trip
+                            </Link>
+
+                            {/* onClick cancels THIS booking by its id. The button
+                                disables itself while this exact row is mid-cancel
+                                (cancellingId matches its id). */}
+                            {!isCancelled && (
                               <button
                                 onClick={() => handleCancelBooking(booking._id)}
                                 disabled={cancellingId === booking._id}
@@ -371,8 +426,8 @@ export default function BookingsPage() {
                                 )}
                                 Cancel Ride
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -388,6 +443,16 @@ export default function BookingsPage() {
           authOpen state); "onClose" lets it tell us to hide it again. These are
           props — settings we pass into the AuthModal component. */}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialMode="login" />
+
+      {/* The live chat panel, shown when "Message" was clicked on a booking. */}
+      {chat && (
+        <BookingChat bookingId={chat.id} title={chat.title} onClose={() => setChat(null)} />
+      )}
+
+      {/* The live video call panel, shown when "Video" was clicked on a booking. */}
+      {call && (
+        <VideoCall bookingId={call.id} title={call.title} onClose={() => setCall(null)} />
+      )}
       <Footer />
     </>
   );

@@ -13,8 +13,48 @@
 import { auth } from "@/app/auth";
 import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
+import { requireUser } from "@/app/lib/guards";
+import { requireBookingParty } from "@/app/lib/booking-access";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
+
+// ---------------------------------------------------------------------------
+// GET — one booking's details, plus who the viewer is relative to it.
+// ---------------------------------------------------------------------------
+// Used by the live trip page (/trip/[id]) to render a title and to decide
+// whether the viewer is the DRIVER (vehicle owner or admin — shares location)
+// or the PASSENGER (the booker — watches the location). Only parties to the
+// booking may read it.
+export async function GET(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { session, error } = await requireUser();
+    if (error) return error;
+
+    const { id } = await context.params;
+
+    const access = await requireBookingParty(id, session);
+    if (access.error) return access.error;
+
+    const { booking, vehicle } = access;
+
+    // Work out the viewer's role so the client knows which UI to show.
+    const myId = String(session.user.id);
+    const isPassenger = String(booking.userId) === myId;
+    const isDriver = !isPassenger; // owner or admin standing in for the house fleet
+
+    return NextResponse.json({
+      booking,
+      vehicle,
+      role: isDriver ? "driver" : "passenger",
+    });
+  } catch (error) {
+    console.error("Fetch booking error:", error);
+    return apiError(getErrorMessage(error, "Failed to load booking"), 500);
+  }
+}
 
 export async function PATCH(
   req: NextRequest,

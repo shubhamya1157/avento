@@ -27,7 +27,7 @@ import { auth } from "@/app/auth";
 import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import vehicleModel from "@/app/models/vehicle";
-import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
+import { createBooking } from "@/app/lib/create-booking";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -63,6 +63,12 @@ export async function GET() {
 
 // ---------------------------------------------------------------------------
 // POST /api/bookings — create a new booking for the logged-in user.
+//
+// This is the "demo" booking path (no real payment taken). When Razorpay IS
+// configured, the browser instead goes through /api/payment/order + /verify,
+// which calls the SAME createBooking() helper after the payment succeeds. All
+// the actual booking rules (dates, availability, double-booking) live in that
+// shared helper so both paths behave identically.
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
@@ -71,82 +77,24 @@ export async function POST(req: NextRequest) {
       return apiError("Unauthorized", 401);
     }
 
-    // Read the booking details the browser sent. The body arrives as JSON text;
-    // `await req.json()` waits for it to load and turns it into an object. The
-    // { a, b, c } = ... syntax then plucks those named fields out in one line.
+    // Read the booking details the browser sent (JSON -> object).
     const { vehicleId, startDate, endDate, totalAmount } = await req.json();
 
-    if (!vehicleId || !startDate || !endDate || !totalAmount) {
-      return apiError("Missing required fields", 400);
-    }
-
-    // The dates arrive as text; turn them into real Date objects so we can
-    // compare them.
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    // Rule 1: the rental must start before it ends.
-    if (start >= end) {
-      return apiError("Start date must be before end date", 400);
-    }
-
-    // Rule 2: you can't book a date that has already passed. We set today's
-    // time to midnight (00:00) so that booking for "today" still counts as
-    // valid rather than being treated as in the past.
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (start < today) {
-      return apiError("Start date cannot be in the past", 400);
-    }
-
-    await connectDB();
-
-    // The fleet is served from a static list and isn't pre-loaded into the
-    // database, so the first time a vehicle is ever booked we insert it on
-    // demand (using its known id) so the booking can reference a real document.
-    let vehicle = await vehicleModel.findById(vehicleId);
-    if (!vehicle) {
-      // Look up the vehicle in the static list by its id.
-      const staticVehicle = STATIC_VEHICLES.find((v) => v._id === vehicleId);
-      if (!staticVehicle) {
-        return apiError("Vehicle not found", 404); // unknown id
-      }
-      // Separate the id from the rest of the fields, then create the database
-      // record using that same id so future bookings find it next time.
-      const { _id, ...vehicleData } = staticVehicle;
-      vehicle = await vehicleModel.create({ _id, ...vehicleData });
-    }
-
-    // Don't allow booking a vehicle that's been marked unavailable.
-    if (!vehicle.availability) {
-      return apiError("Vehicle is currently not available for rent", 400);
-    }
-
-    // Rule 3: prevent double-booking. Look for any existing, non-cancelled
-    // booking for this vehicle whose date range OVERLAPS the requested one.
-    // Two ranges overlap when: existing.start <= new.end AND existing.end >= new.start.
-    const overlappingBooking = await bookingModel.findOne({
-      vehicleId,
-      status: { $ne: "cancelled" }, // $ne = "not equal": ignore cancelled ones
-      startDate: { $lte: end },     // $lte = "less than or equal"
-      endDate: { $gte: start },     // $gte = "greater than or equal"
-    });
-
-    if (overlappingBooking) {
-      return apiError("This vehicle is already booked for the selected dates.", 400);
-    }
-
-    // All checks passed — save the booking, tied to this user.
-    const booking = await bookingModel.create({
+    // Hand off to the shared helper, which validates everything and either
+    // creates the booking or returns a clear error + status code.
+    const result = await createBooking({
       userId: session.user.id,
       vehicleId,
-      startDate: start,
-      endDate: end,
+      startDate,
+      endDate,
       totalAmount,
-      status: "confirmed",
     });
 
-    return NextResponse.json(booking, { status: 201 }); // 201 = Created
+    if (result.errorMessage) {
+      return apiError(result.errorMessage, result.errorStatus);
+    }
+
+    return NextResponse.json(result.booking, { status: 201 }); // 201 = Created
   } catch (error) {
     console.error("Create booking error:", error);
     return apiError(getErrorMessage(error, "Failed to place booking"), 500);

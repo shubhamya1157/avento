@@ -21,7 +21,33 @@ detailed beginner comments inside it — open any file and read top to bottom.)
 - **Book a vehicle** — pick a pick‑up and return date, see the live price total, and
   confirm. The server prevents double‑booking the same vehicle for overlapping dates.
 - **Manage bookings** — a `/bookings` page lists your reservations and lets you cancel them.
+- **Become a partner** — on `/partner`, any logged‑in user can list a vehicle they own
+  (details, photos, and their own contact info) and track each submission's status.
+- **Admin review** — admins get an `/admin` dashboard and an `/admin/vehicles` review queue
+  to **approve** or **reject** partner submissions. Approved vehicles join the public fleet
+  and become bookable. (More features — payments, maps, live chat, video KYC, a chatbot — are
+  planned in later phases.)
 - **Static pages** — a cinematic `/about` page and a `/contact` page with a form and FAQs.
+
+---
+
+## 👑 Becoming an admin
+
+There's no "make me an admin" button (that would be unsafe). Instead, admins are listed by
+email in `.env.local`:
+
+```bash
+ADMIN_EMAILS=you@example.com,teammate@example.com
+```
+
+Anyone who logs in with one of those emails is automatically given the `admin` role — an
+"Admin" link then appears in the navigation bar. The very first admin is created just by
+logging in; no manual database editing is needed.
+
+> **How partner vehicles flow through the system:** a partner submits a vehicle on `/partner`
+> → it's saved as a `pending` vehicle (hidden from renters) → an admin approves it on
+> `/admin/vehicles` → it becomes `approved` and immediately shows up in `/vehicles`, bookable
+> like any house‑fleet car. Uploaded photos are saved under `public/uploads/`.
 
 ---
 

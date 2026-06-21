@@ -19,6 +19,8 @@
 
 import { SessionProvider } from 'next-auth/react';
 import React from 'react';
+// The floating help chat bubble, shown on every page (see ChatWidget.tsx).
+import ChatWidget from './ChatWidget';
 
 // `children` is a special prop: it's whatever JSX you put BETWEEN this
 // component's opening and closing tags. In our case that's the entire page.
@@ -29,5 +31,13 @@ import React from 'react';
 // down to all of it. The { } around children switch from JSX into JavaScript so
 // we can drop the value in.
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  // We render the page (children) plus the floating ChatWidget side by side
+  // inside the SessionProvider, so the widget can also read the login session
+  // and shows up on every page of the app.
+  return (
+    <SessionProvider>
+      {children}
+      <ChatWidget />
+    </SessionProvider>
+  );
 }

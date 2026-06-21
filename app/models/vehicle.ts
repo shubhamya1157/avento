@@ -23,13 +23,26 @@ export interface VehicleType {
     brand: string;        // e.g. "Tesla"
     model: string;        // e.g. "Model S Plaid"
     type: "car" | "bike" | "suv";
-    image: string;        // path to the photo, e.g. "/vehicle-tesla.jpg"
+    image: string;        // path to the cover photo, e.g. "/vehicle-tesla.jpg"
     pricePerDay: number;  // rental cost for one day, in dollars
     description: string;
     transmission: "Automatic" | "Manual";
     fuel: "Electric" | "Petrol" | "Diesel" | "Hybrid";
     seats: number;
     availability: boolean; // true = can be booked, false = already taken
+
+    // --- Partner / approval fields (added for the "become a partner" feature) ---
+    // These are OPTIONAL so the original house fleet keeps working untouched.
+    // A partner-submitted vehicle waits as "pending" until an admin approves it.
+    source?: "fleet" | "partner";              // who supplied it: the house fleet or a partner
+    status?: "approved" | "pending" | "rejected"; // approval state (only "approved" is bookable)
+    ownerId?: mongoose.Schema.Types.ObjectId; // which user (partner) owns/submitted it
+    ownerName?: string;                        // the owner's contact name
+    ownerPhone?: string;                       // the owner's contact phone
+    licensePlate?: string;                     // the vehicle's number plate / registration
+    location?: string;                         // where the vehicle is based (city / area)
+    adminNote?: string;                        // a note from the admin (e.g. reason for rejection)
+    images?: string[];                         // extra gallery photos beyond the cover `image`
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +94,28 @@ const vehicleSchema = new mongoose.Schema<VehicleType>(
             type: Boolean,
             default: true, // a newly added vehicle is available by default
         },
+
+        // --- Partner / approval fields (see the interface above) ---
+        source: {
+            type: String,
+            enum: ["fleet", "partner"],
+            default: "fleet", // anything created the old way is part of the house fleet
+        },
+        status: {
+            type: String,
+            enum: ["approved", "pending", "rejected"],
+            default: "approved", // house-fleet vehicles are live immediately
+        },
+        ownerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "userModel", // points at the partner who submitted this vehicle
+        },
+        ownerName: { type: String },
+        ownerPhone: { type: String },
+        licensePlate: { type: String },
+        location: { type: String },
+        adminNote: { type: String },
+        images: { type: [String], default: [] }, // a list of extra photo URLs
     },
     // Auto-add `createdAt` / `updatedAt` timestamps to every vehicle record.
     { timestamps: true }

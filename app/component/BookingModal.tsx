@@ -37,6 +37,42 @@ interface BookingModalProps {
 }
 
 // ---------------------------------------------------------------------------
+// Is real payment switched on? Next.js replaces `process.env.NEXT_PUBLIC_*`
+// with its actual value when it builds the browser code, so this is just a
+// plain string here. If it's set, we run the Razorpay checkout; if it's blank
+// (the default), the whole app falls back to a "demo" booking with no payment.
+// ---------------------------------------------------------------------------
+const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
+const razorpayEnabled = Boolean(RAZORPAY_KEY_ID);
+
+// Razorpay's checkout adds a `Razorpay` constructor onto the browser's global
+// `window` object once its script loads. TypeScript doesn't know about it, so we
+// declare it here (typed loosely as it's a third-party script).
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// loadRazorpayScript: make sure Razorpay's checkout.js is loaded in the page
+// before we try to open the popup. We add the <script> tag the first time and
+// reuse it afterwards. Returns a promise that resolves true once it's ready.
+// ---------------------------------------------------------------------------
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Already loaded on a previous booking? Then we're good immediately.
+    if (window.Razorpay) return resolve(true);
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false); // network blocked / offline
+    document.body.appendChild(script);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Work out sensible default dates so the form isn't empty: pick-up tomorrow,
 // return three days from now. We return them as "YYYY-MM-DD" text because
 // that's the format an <input type="date"> expects.
@@ -125,31 +161,112 @@ function BookingForm({
     setError(null);
     setLoading(true);
 
+    // The booking details are identical no matter how we pay, so build them once.
+    const bookingDetails = {
+      vehicleId: vehicle._id,
+      startDate,
+      endDate,
+      totalAmount: total,
+    };
+
     try {
-      const res = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vehicleId: vehicle._id,
-          startDate,
-          endDate,
-          totalAmount: total,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        // The server may reject for reasons like double-booking; show its message.
-        throw new Error(data.message || "Failed to book vehicle");
+      if (razorpayEnabled) {
+        // --- Real payment path: hand off to Razorpay's checkout popup. ---
+        await payWithRazorpay(bookingDetails);
+      } else {
+        // --- Demo path: no payment configured, just create the booking. ---
+        const res = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bookingDetails),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          // The server may reject for reasons like double-booking; show its message.
+          throw new Error(data.message || "Failed to book vehicle");
+        }
+        setSuccess(true); // switch to the "RIDE CONFIRMED" screen
       }
-
-      setSuccess(true); // switch to the "RIDE CONFIRMED" screen
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
+      // Re-enable the button. For the Razorpay path the popup is now open on top of
+      // the form, and its own callbacks (below) flip to the success/error screen.
       setLoading(false);
     }
+  };
+
+  // ------------------------------------------------------------------------
+  // payWithRazorpay: the real-payment flow (only used when Razorpay is enabled).
+  //   1. Ask our server to create an order (/api/payment/order).
+  //   2. Make sure Razorpay's checkout script is loaded.
+  //   3. Open the checkout popup. When the customer finishes paying, Razorpay
+  //      calls our `handler`, which sends the result to /api/payment/verify; if
+  //      the server confirms it, we show the "RIDE CONFIRMED" screen.
+  // ------------------------------------------------------------------------
+  const payWithRazorpay = async (bookingDetails: {
+    vehicleId: string;
+    startDate: string;
+    endDate: string;
+    totalAmount: number;
+  }) => {
+    // Step 1 — create the order on our server.
+    const orderRes = await fetch("/api/payment/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ totalAmount: bookingDetails.totalAmount }),
+    });
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) {
+      throw new Error(orderData.message || "Could not start payment");
+    }
+
+    // Step 2 — load Razorpay's checkout script (no-op if already loaded).
+    const ready = await loadRazorpayScript();
+    if (!ready || !window.Razorpay) {
+      throw new Error("Could not load the payment gateway. Check your connection.");
+    }
+
+    // Step 3 — open the checkout popup.
+    const razorpay = new window.Razorpay({
+      key: orderData.keyId,        // public key id (safe to expose)
+      amount: orderData.amount,    // in paise, echoed back from our order
+      currency: orderData.currency,
+      order_id: orderData.orderId,
+      name: "Avento",
+      description: `${vehicle.brand} ${vehicle.model} rental`,
+      image: vehicle.image,
+      // Pre-fill the customer's details so they don't retype them.
+      prefill: {
+        name: session?.user?.name || "",
+        email: session?.user?.email || "",
+      },
+      theme: { color: "#ffffff" },
+      // Called by Razorpay AFTER a successful payment. We verify it server-side.
+      handler: async (response: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      }) => {
+        try {
+          const verifyRes = await fetch("/api/payment/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Send Razorpay's signed result PLUS the booking details so the
+            // server can verify the payment and create the booking in one step.
+            body: JSON.stringify({ ...response, ...bookingDetails }),
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok) {
+            throw new Error(verifyData.message || "Payment could not be verified");
+          }
+          setSuccess(true); // verified + booked -> show the confirmation screen
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Payment verification failed.");
+        }
+      },
+    });
+    razorpay.open();
   };
 
   // ------------------------------------------------------------------------
@@ -322,6 +439,8 @@ function BookingForm({
             <Loader2 size={18} className="animate-spin" />
           ) : !session ? (
             "Login to Book"
+          ) : razorpayEnabled ? (
+            `Pay $${total} & Book`
           ) : (
             "Confirm Reservation"
           )}

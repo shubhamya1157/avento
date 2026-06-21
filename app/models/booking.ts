@@ -32,6 +32,14 @@ export interface BookingType extends Document {
     // three words. pending = awaiting action, confirmed = locked in,
     // cancelled = called off.
     status: "pending" | "confirmed" | "cancelled";
+
+    // --- Payment fields (added for the Razorpay feature) ---
+    // `paid` is true once money has actually been taken. In "demo mode" (no
+    // Razorpay keys configured) a booking is created with paid:false.
+    // The two ids are Razorpay's references, kept for our records / receipts.
+    paid?: boolean;
+    paymentId?: string; // Razorpay payment id (e.g. "pay_XXXX")
+    orderId?: string;   // Razorpay order id (e.g. "order_XXXX")
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +76,14 @@ const bookingSchema = new mongoose.Schema<BookingType>(
             enum: ["pending", "confirmed", "cancelled"],
             default: "confirmed", // in this app a new booking is confirmed at once
         },
+
+        // --- Payment fields (see the interface above) ---
+        paid: {
+            type: Boolean,
+            default: false, // becomes true only after a verified Razorpay payment
+        },
+        paymentId: { type: String },
+        orderId: { type: String },
     },
     // Auto-add `createdAt` (used to show "Booked On") and `updatedAt`.
     { timestamps: true }

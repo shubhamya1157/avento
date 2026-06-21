@@ -22,7 +22,7 @@
 import { useState } from "react";                      // useState = React's memory tool (explained below)
 import Link from "next/link";                          // Link = Next.js's fast in-app link (no full page reload)
 import { useSession, signOut } from "next-auth/react"; // login helpers: read who's logged in / log them out
-import { User, LogOut, Menu, X, Calendar } from "lucide-react"; // ready-made icon shapes
+import { User, LogOut, Menu, X, Calendar, Handshake, Shield } from "lucide-react"; // ready-made icon shapes
 import AuthModal from "./AuthModal";                   // our own login/sign-up popup, from a sibling file
 
 // A "component" is a reusable piece of screen, written as a function that
@@ -79,7 +79,11 @@ export default function Nav() {
     // The <> ... </> is a "Fragment": an empty wrapper that lets us return the
     // nav bar AND the auth popup side by side without adding an extra <div>.
     <>
-      <nav className="fixed top-4 left-1/2 z-[9999] w-[95%] max-w-7xl -translate-x-1/2">
+      {/* Width: leave a small 0.75rem gutter on each side via calc() so the bar
+          never touches the screen edge even on the narrowest phones (~320px),
+          then cap it at max-w-7xl and center it. (The old fixed w-[95%] left too
+          little room on tiny screens.) */}
+      <nav className="fixed top-4 left-1/2 z-[9999] w-[calc(100%-1.5rem)] max-w-7xl -translate-x-1/2">
         <div className="relative flex h-20 items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-6 md:px-8 backdrop-blur-xl">
           {/* Logo — clicking it returns home */}
           <Link href="/">
@@ -114,6 +118,26 @@ export default function Nav() {
               >
                 <Calendar size={14} />
                 My Bookings
+              </Link>
+            )}
+            {/* "Become a Partner" is shown to everyone — the page itself asks
+                guests to log in first. */}
+            <Link
+              href="/partner"
+              className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
+            >
+              <Handshake size={14} />
+              Partner
+            </Link>
+            {/* "Admin" only appears for admins. The role lives on the session
+                (set by the session callback in app/auth.ts). */}
+            {session?.user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 text-sm font-medium text-amber-300/90 transition hover:text-amber-200"
+              >
+                <Shield size={14} />
+                Admin
               </Link>
             )}
           </div>
@@ -196,6 +220,24 @@ export default function Nav() {
               >
                 <Calendar size={14} />
                 My Bookings
+              </Link>
+            )}
+            <Link
+              href="/partner"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
+            >
+              <Handshake size={14} />
+              Partner
+            </Link>
+            {session?.user?.role === "admin" && (
+              <Link
+                href="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-1.5 text-sm font-medium text-amber-300/90 transition hover:text-amber-200"
+              >
+                <Shield size={14} />
+                Admin
               </Link>
             )}
 

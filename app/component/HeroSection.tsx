@@ -68,7 +68,7 @@ export default function HeroSection() {
         </span>
 
         {/* The main headline */}
-        <h1 className="fade-up fade-up-2 max-w-5xl text-5xl font-black leading-none text-white sm:text-6xl md:text-7xl lg:text-8xl">
+        <h1 className="fade-up fade-up-2 max-w-5xl text-4xl font-black leading-none text-white sm:text-6xl md:text-7xl lg:text-8xl">
           Every Ride
           <br />
           Creates A Story
