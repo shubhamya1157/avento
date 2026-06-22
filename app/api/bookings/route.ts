@@ -28,6 +28,7 @@ import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import vehicleModel from "@/app/models/vehicle";
 import { createBooking } from "@/app/lib/create-booking";
+import { requireCustomer } from "@/app/lib/guards";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -72,22 +73,22 @@ export async function GET() {
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return apiError("Unauthorized", 401);
-    }
+    // Must be a CUSTOMER: partners and admins are blocked from booking here.
+    const { session, error } = await requireCustomer();
+    if (error) return error;
 
-    // Read the booking details the browser sent (JSON -> object).
-    const { vehicleId, startDate, endDate, totalAmount } = await req.json();
+    // Read the booking details the browser sent (JSON -> object). Note we do
+    // NOT read a price here — createBooking computes the amount itself from the
+    // dates + the vehicle, so a tampered request can't set its own price.
+    const { vehicleId, startDate, endDate } = await req.json();
 
     // Hand off to the shared helper, which validates everything and either
     // creates the booking or returns a clear error + status code.
     const result = await createBooking({
-      userId: session.user.id,
+      userId: session.user.id!,
       vehicleId,
       startDate,
       endDate,
-      totalAmount,
     });
 
     if (result.errorMessage) {

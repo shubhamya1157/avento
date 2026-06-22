@@ -181,7 +181,7 @@ export default function VehiclesPage() {
                           {" "} is just a deliberate space so the price and the
                           "/ day" text don't run together. */}
                       <div className="absolute right-4 top-4 rounded-full border border-white/5 bg-black/60 px-3 py-1 text-xs font-bold text-white">
-                        ${vehicle.pricePerDay}{" "}
+                        ₹{vehicle.pricePerDay}{" "}
                         <span className="text-[10px] font-normal text-zinc-400">/ day</span>
                       </div>
                     </div>
@@ -255,8 +255,8 @@ export default function VehiclesPage() {
                           }}
                           className="w-full cursor-pointer rounded-2xl bg-white py-3.5 text-xs font-bold text-black transition-all hover:scale-[1.01] hover:bg-zinc-100 active:scale-[0.99] disabled:opacity-30 disabled:hover:scale-100"
                         >
-                          {/* Label reads "Book Now" if available, else "Unavailable". */}
-                          {vehicle.availability ? "Book Now" : "Unavailable"}
+                          {/* Label reads "Take on Rent" if available, else "Unavailable". */}
+                          {vehicle.availability ? "Take on Rent" : "Unavailable"}
                         </button>
                       </div>
                     </div>

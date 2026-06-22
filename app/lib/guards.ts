@@ -64,3 +64,32 @@ export async function requireAdmin(): Promise<GuardResult> {
 
   return { session, error: null };
 }
+
+// ---------------------------------------------------------------------------
+// requireCustomer: pass only if the logged-in user can act as a CUSTOMER, i.e.
+// book/rent vehicles. Partners and admins are staff/owners on this platform, not
+// renters, so they're refused (403). Anyone else logged in (role "user", or the
+// rare session with no role yet) is allowed through.
+//
+// This is the single gate for the "partners & admins can't book" rule, used by
+// every booking entry point (rentals, rides, and the payment routes).
+// ---------------------------------------------------------------------------
+export async function requireCustomer(): Promise<GuardResult> {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return { session: null, error: apiError("Unauthorized", 401) };
+  }
+
+  const role = session.user.role;
+  // Belt-and-braces: an ADMIN_EMAILS address counts as admin even if the token
+  // hasn't caught up to role:"admin" yet.
+  if (role === "partner" || role === "admin" || isAdminEmail(session.user.email)) {
+    return {
+      session: null,
+      error: apiError("Partner and admin accounts can't book vehicles", 403),
+    };
+  }
+
+  return { session, error: null };
+}

@@ -19,7 +19,7 @@
 // checking it here is the one trustworthy place to confirm "yes, money arrived".
 // ===========================================================================
 
-import { requireUser } from "@/app/lib/guards";
+import { requireCustomer } from "@/app/lib/guards";
 import { verifyPaymentSignature, isRazorpayConfigured, refundPayment } from "@/app/lib/razorpay";
 import { createBooking } from "@/app/lib/create-booking";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
@@ -35,7 +35,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    const { session, error } = await requireUser();
+    const { session, error } = await requireCustomer();
     if (error) return error;
 
     // Reaching here without keys means the order was never really created — refuse.
@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
       vehicleId,
       startDate,
       endDate,
-      totalAmount,
     } = await req.json();
 
     // All three Razorpay values must be present, or there's nothing to verify.
@@ -78,7 +77,6 @@ export async function POST(req: NextRequest) {
       vehicleId,
       startDate,
       endDate,
-      totalAmount,
       payment: { paymentId: razorpay_payment_id, orderId: razorpay_order_id },
     });
 

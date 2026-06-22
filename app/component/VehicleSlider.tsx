@@ -104,8 +104,7 @@ export default function VehicleSlider() {
     <section className="relative bg-black px-6 py-24 text-white md:px-12 lg:px-24">
       {/* Section heading */}
       <div className="mx-auto max-w-7xl">
-        <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">Curated Fleet</span>
-        <h2 className="mt-2 text-3xl font-black tracking-wide sm:text-4xl md:text-5xl">
+        <h2 className="text-3xl font-black tracking-wide sm:text-4xl md:text-5xl">
           THE COLLECTION
         </h2>
         <div className="mt-4 h-px w-20 bg-white/20" />
@@ -125,10 +124,6 @@ export default function VehicleSlider() {
               transition={{ duration: 0.4 }}
               className="space-y-6"
             >
-              <span className="inline-block rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-300">
-                {activeVehicle.type} • {activeVehicle.transmission}
-              </span>
-
               <h3 className="text-4xl font-black leading-none tracking-tight text-white sm:text-5xl">
                 {activeVehicle.brand}
                 <br />
@@ -172,7 +167,7 @@ export default function VehicleSlider() {
               <div className="flex items-center justify-between gap-6 pt-2">
                 <div>
                   <span className="block text-xs uppercase tracking-wider text-zinc-500">Daily Rate</span>
-                  <span className="text-2xl font-black text-white">${activeVehicle.pricePerDay}</span>
+                  <span className="text-2xl font-black text-white">₹{activeVehicle.pricePerDay}</span>
                 </div>
                 <button
                   // onClick = "when clicked, run these steps". Here we save the
@@ -183,7 +178,7 @@ export default function VehicleSlider() {
                   }}
                   className="rounded-full bg-white px-8 py-3.5 text-sm font-bold text-black transition-all duration-300 hover:scale-105 active:scale-95"
                 >
-                  Book This Ride
+                  Take on Rent
                 </button>
               </div>
             </motion.div>

@@ -7,8 +7,6 @@
 //
 // CINEMATIC TOUCHES — all done with PLAIN CSS (see globals.css), no animation
 // library, so they ALWAYS run even if the page's JavaScript is slow or blocked:
-//   - "animate-kenburns"      — the photo slowly zooms, making it feel alive.
-//   - "film-grain"            — a faint moving speckle for a movie-like texture.
 //   - "fade-up" + "fade-up-N" — each line rises into view one after another.
 //
 // (An earlier version animated the text with a JavaScript library. The problem:
@@ -37,10 +35,9 @@ export default function HeroSection() {
   // transparent film: photo at the back, dark tints over it, text at the front.
   return (
     <section className="relative min-h-screen overflow-hidden">
-      {/* Layer 1: the background photo. `animate-kenburns` (see globals.css)
-          makes it drift/zoom very slowly for a cinematic feel. */}
+      {/* Layer 1: the background photo. (The slow zoom/drift effect was removed.) */}
       <div
-        className="animate-kenburns absolute inset-0 bg-cover bg-center"
+        className="absolute inset-0 bg-cover bg-center"
         // style={{ ... }} sets CSS directly on this element. The DOUBLE braces
         // look odd but are just two things: the outer { } means "JavaScript
         // goes here", and the inner { } is the actual settings object. This one
@@ -53,10 +50,6 @@ export default function HeroSection() {
           that gets darker toward the bottom of the screen. */}
       <div className="absolute inset-0 bg-black/65" />
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/90" />
-
-      {/* The "film-grain" class (see globals.css) overlays a faint moving
-          speckle for that filmic texture. It's purely decorative. */}
-      <div className="film-grain absolute inset-0" />
 
       {/* Layer 4: the actual content, centered. "z-10" lifts it above the
           overlays so it isn't hidden behind them. Each line below carries
@@ -98,20 +91,21 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* Two call-to-action buttons. Both are <Link>s that take the visitor to
-            the /vehicles page — one filled (primary), one outlined (secondary). */}
+        {/* Two call-to-action buttons, one per product line:
+            - "Get a Ride"  -> /ride     (point-to-point ride-hailing)
+            - "Take on Rent" -> /vehicles (book a vehicle by the day) */}
         <div className="fade-up fade-up-6 mt-12 flex flex-col gap-4 sm:flex-row">
           <Link
-            href="/vehicles"
+            href="/ride"
             className="rounded-full bg-white px-8 py-4 font-semibold text-black transition-all duration-300 hover:scale-105"
           >
-            Book Now
+            Get a Ride
           </Link>
           <Link
             href="/vehicles"
             className="rounded-full border border-white/20 bg-white/5 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/10"
           >
-            Explore Rides
+            Take on Rent
           </Link>
         </div>
       </div>

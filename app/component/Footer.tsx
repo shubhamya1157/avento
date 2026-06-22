@@ -200,10 +200,12 @@ export default function Footer() {
 
       <div className="mx-auto max-w-7xl mt-16 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-600 gap-4 relative z-10">
         <p>© {currentYear} Avento Inc. All rights reserved.</p>
+        {/* These point to real in-app pages now, so they use <Link> (fast
+            client navigation) instead of an href="#" that just jumped to top. */}
         <div className="flex gap-6">
-          <a href="#" className="hover:text-zinc-400 transition-colors duration-300">Terms of Service</a>
-          <a href="#" className="hover:text-zinc-400 transition-colors duration-300">Privacy Policy</a>
-          <a href="#" className="hover:text-zinc-400 transition-colors duration-300">Rental Terms</a>
+          <Link href="/terms" className="hover:text-zinc-400 transition-colors duration-300">Terms of Service</Link>
+          <Link href="/privacy" className="hover:text-zinc-400 transition-colors duration-300">Privacy Policy</Link>
+          <Link href="/rental-terms" className="hover:text-zinc-400 transition-colors duration-300">Rental Terms</Link>
         </div>
       </div>
     </footer>

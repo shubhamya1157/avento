@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     // objects (not heavy Mongoose documents), which is all we need to send back.
     // If the database is briefly unreachable we still return the house fleet,
     // so the page never goes blank over a hiccup.
-    let partnerVehicles: unknown[] = [];
+    let partnerVehicles: Record<string, unknown>[] = [];
     // A lookup table of vehicleId -> { average, count } so we can stamp each
     // vehicle below with its star rating. Empty by default, so if the database
     // is unreachable every vehicle simply shows "no reviews yet".

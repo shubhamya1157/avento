@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Loader2, AlertCircle, Search, ShieldCheck, Handshake, User as UserIcon } from "lucide-react";
+import AdminPageHeader from "@/app/component/AdminPageHeader";
 
 // The shape of a user as /api/admin/users returns it (password is never sent).
 interface AdminUser {
@@ -23,11 +24,13 @@ interface AdminUser {
   createdAt: string;
 }
 
-// A little coloured badge per role, so admins/partners stand out at a glance.
+// A badge per role. We stay monochrome and lean on BRIGHTNESS for hierarchy:
+// the most privileged role (admin) is the brightest (solid white), partners sit
+// in the middle, and ordinary users are the most muted.
 const ROLE_STYLES: Record<AdminUser["role"], { label: string; cls: string; icon: typeof UserIcon }> = {
-  admin: { label: "Admin", cls: "bg-emerald-500/15 text-emerald-400", icon: ShieldCheck },
-  partner: { label: "Partner", cls: "bg-sky-500/15 text-sky-400", icon: Handshake },
-  user: { label: "User", cls: "bg-white/10 text-zinc-300", icon: UserIcon },
+  admin: { label: "Admin", cls: "bg-white text-black", icon: ShieldCheck },
+  partner: { label: "Partner", cls: "bg-white/10 text-white", icon: Handshake },
+  user: { label: "User", cls: "bg-white/5 text-zinc-400", icon: UserIcon },
 };
 
 export default function AdminUsersPage() {
@@ -66,10 +69,18 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">Admin</span>
-        <h1 className="text-3xl font-black tracking-wide md:text-4xl">Users</h1>
-      </div>
+      <AdminPageHeader
+        eyebrow="Directory"
+        title="Users"
+        description="Every account on the platform with its role and join date."
+        right={
+          !loading && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-zinc-300">
+              {users.length} total
+            </span>
+          )
+        }
+      />
 
       {/* Search box */}
       <div className="relative max-w-sm">
@@ -125,9 +136,9 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-5 py-4">
                       {u.emailVerified ? (
-                        <span className="text-emerald-400">Yes</span>
+                        <span className="text-white">Yes</span>
                       ) : (
-                        <span className="text-zinc-500">No</span>
+                        <span className="text-zinc-600">No</span>
                       )}
                     </td>
                     <td className="px-5 py-4 text-zinc-400">

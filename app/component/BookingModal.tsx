@@ -22,13 +22,16 @@
 // names start with "use") that a component can call. `useState` remembers a
 // value between redraws; `useMemo` remembers the RESULT of a calculation so it
 // isn't redone needlessly. More on each where they're used below.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { X, Calendar, DollarSign, Clock, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { X, Calendar, IndianRupee, Clock, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Vehicle } from "@/app/lib/types";
 import AuthModal from "./AuthModal";
+// Shared Razorpay browser helpers (also used by the /ride wizard) so the two
+// checkouts never drift apart.
+import { razorpayEnabled, loadRazorpayScript } from "@/app/lib/razorpay-client";
 
 interface BookingModalProps {
   open: boolean;
@@ -36,40 +39,13 @@ interface BookingModalProps {
   vehicle: Vehicle | null; // the chosen vehicle, or null if none picked yet
 }
 
-// ---------------------------------------------------------------------------
-// Is real payment switched on? Next.js replaces `process.env.NEXT_PUBLIC_*`
-// with its actual value when it builds the browser code, so this is just a
-// plain string here. If it's set, we run the Razorpay checkout; if it's blank
-// (the default), the whole app falls back to a "demo" booking with no payment.
-// ---------------------------------------------------------------------------
-const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
-const razorpayEnabled = Boolean(RAZORPAY_KEY_ID);
-
-// Razorpay's checkout adds a `Razorpay` constructor onto the browser's global
-// `window` object once its script loads. TypeScript doesn't know about it, so we
-// declare it here (typed loosely as it's a third-party script).
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// loadRazorpayScript: make sure Razorpay's checkout.js is loaded in the page
-// before we try to open the popup. We add the <script> tag the first time and
-// reuse it afterwards. Returns a promise that resolves true once it's ready.
-// ---------------------------------------------------------------------------
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    // Already loaded on a previous booking? Then we're good immediately.
-    if (window.Razorpay) return resolve(true);
-
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false); // network blocked / offline
-    document.body.appendChild(script);
-  });
+// The bits of the saved booking we keep for the confirmation screen. These come
+// STRAIGHT FROM THE SERVER's reply, so `totalAmount` is the price it actually
+// charged/recorded and `paid` reflects whether real money changed hands.
+interface ConfirmedBooking {
+  _id: string;
+  totalAmount: number;
+  paid: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +88,22 @@ function BookingForm({
   const [endDate, setEndDate] = useState(defaults.endDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false); // true once booking confirmed
+  // Once the server confirms the booking we keep what it sent back (its id, the
+  // authoritative amount it computed, and whether it was paid) so the success
+  // screen shows the REAL figures rather than anything the browser guessed.
+  const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
+
+  // When the pick-up date changes, keep the return date valid: if it now lands
+  // on or before pick-up, push it to the day after. This stops the price/CTA
+  // silently disappearing when someone moves the start past the end.
+  const handleStartChange = (value: string) => {
+    setStartDate(value);
+    if (value && endDate && endDate <= value) {
+      const next = new Date(value);
+      next.setDate(next.getDate() + 1);
+      setEndDate(next.toISOString().split("T")[0]);
+    }
+  };
 
   // useMemo RE-CALCULATES the number of days and the total price, but ONLY when
   // the dates or the per-day price change (the list in the [] at the end). This
@@ -162,16 +153,20 @@ function BookingForm({
     setLoading(true);
 
     // The booking details are identical no matter how we pay, so build them once.
+    // We deliberately DON'T send a price — the server computes it from the dates
+    // and the vehicle (see app/lib/rental-price.ts), so it can't be tampered with.
     const bookingDetails = {
       vehicleId: vehicle._id,
       startDate,
       endDate,
-      totalAmount: total,
     };
 
     try {
       if (razorpayEnabled) {
         // --- Real payment path: hand off to Razorpay's checkout popup. ---
+        // We intentionally leave `loading` ON here: the popup is now open and its
+        // own callbacks (handler / ondismiss, below) reset it, which also keeps
+        // the Confirm button disabled so it can't be double-submitted.
         await payWithRazorpay(bookingDetails);
       } else {
         // --- Demo path: no payment configured, just create the booking. ---
@@ -185,13 +180,12 @@ function BookingForm({
           // The server may reject for reasons like double-booking; show its message.
           throw new Error(data.message || "Failed to book vehicle");
         }
-        setSuccess(true); // switch to the "RIDE CONFIRMED" screen
+        // Show the confirmation using the server's own figures.
+        setConfirmed({ _id: data._id, totalAmount: data.totalAmount, paid: Boolean(data.paid) });
+        setLoading(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      // Re-enable the button. For the Razorpay path the popup is now open on top of
-      // the form, and its own callbacks (below) flip to the success/error screen.
       setLoading(false);
     }
   };
@@ -208,13 +202,13 @@ function BookingForm({
     vehicleId: string;
     startDate: string;
     endDate: string;
-    totalAmount: number;
   }) => {
-    // Step 1 — create the order on our server.
+    // Step 1 — create the order on our server. We send the rental (vehicle +
+    // dates), NOT a price: the server prices it itself so the charge is trusted.
     const orderRes = await fetch("/api/payment/order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ totalAmount: bookingDetails.totalAmount }),
+      body: JSON.stringify(bookingDetails),
     });
     const orderData = await orderRes.json();
     if (!orderRes.ok) {
@@ -260,10 +254,21 @@ function BookingForm({
           if (!verifyRes.ok) {
             throw new Error(verifyData.message || "Payment could not be verified");
           }
-          setSuccess(true); // verified + booked -> show the confirmation screen
+          // Verified + booked -> show the confirmation with the server's figures.
+          setConfirmed({ _id: verifyData._id, totalAmount: verifyData.totalAmount, paid: Boolean(verifyData.paid) });
         } catch (err) {
           setError(err instanceof Error ? err.message : "Payment verification failed.");
+        } finally {
+          setLoading(false); // re-enable the form whatever the outcome
         }
+      },
+      modal: {
+        // If the customer closes the popup without paying, gently re-enable the
+        // form and explain — rather than leaving the button stuck "loading".
+        ondismiss: () => {
+          setLoading(false);
+          setError("Payment cancelled — you can try again whenever you're ready.");
+        },
       },
     });
     razorpay.open();
@@ -272,9 +277,13 @@ function BookingForm({
   // ------------------------------------------------------------------------
   // After a successful booking, replace the form with a confirmation screen.
   // ------------------------------------------------------------------------
-  if (success) {
+  if (confirmed) {
+    // A tidy "Mon DD, YYYY" date for the summary (e.g. "Jun 24, 2026").
+    const fmt = (d: string) =>
+      new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
     return (
-      <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
+      <div className="flex flex-col items-center px-8 py-12 text-center">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -283,28 +292,91 @@ function BookingForm({
         >
           <CheckCircle size={36} />
         </motion.div>
-        <h3 className="mt-6 text-2xl font-black tracking-wider text-white">RIDE CONFIRMED</h3>
+        <h3 className="mt-6 text-2xl font-black tracking-wider text-white">BOOKING CONFIRMED</h3>
         <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
-          Your booking for the{" "}
+          Your{" "}
           <span className="font-semibold text-white">
             {vehicle.brand} {vehicle.model}
           </span>{" "}
-          has been confirmed.
+          is reserved. The details are below and in My Bookings.
         </p>
-        <div className="mt-8 flex gap-4">
+
+        {/* Booking summary — dates, duration, and the amount the SERVER recorded. */}
+        <div className="mt-7 w-full space-y-3 rounded-2xl border border-white/10 bg-zinc-900/50 p-5 text-left text-sm">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="flex items-center gap-1.5"><Calendar size={13} /> Pick-up</span>
+            <span className="font-semibold text-white">{fmt(startDate)}</span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="flex items-center gap-1.5"><Calendar size={13} /> Return</span>
+            <span className="font-semibold text-white">{fmt(endDate)}</span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="flex items-center gap-1.5"><Clock size={13} /> Duration</span>
+            <span className="font-semibold text-white">{days} {days === 1 ? "day" : "days"}</span>
+          </div>
+          <div className="my-1 h-px bg-white/5" />
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-zinc-200">
+              {confirmed.paid ? "Paid" : "Total"}
+            </span>
+            <span className="text-lg font-black text-white">₹{confirmed.totalAmount}</span>
+          </div>
+          {!confirmed.paid && (
+            <p className="text-[11px] text-zinc-500">Reserved in demo mode — no payment was taken.</p>
+          )}
+        </div>
+
+        <div className="mt-7 flex w-full gap-3">
           <button
             onClick={onClose}
-            className="rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:scale-105"
+            className="w-1/3 rounded-full border border-white/20 bg-white/5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
           >
             Close
           </button>
           <Link
             href="/bookings"
-            className="rounded-full border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+            className="w-2/3 rounded-full bg-white py-2.5 text-center text-sm font-semibold text-black transition hover:scale-[1.02]"
           >
             My Bookings
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------------
+  // Partners and admins are staff/owners, not renters — they can't book. The
+  // server enforces this too (requireCustomer), but we show a clear panel here
+  // instead of a form they'd only get a 403 from.
+  // ------------------------------------------------------------------------
+  const role = session?.user?.role;
+  if (role === "partner" || role === "admin") {
+    return (
+      <div className="flex flex-col items-center px-8 py-14 text-center">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-6 top-6 text-zinc-400 transition hover:text-white"
+          aria-label="Close"
+        >
+          <X size={20} />
+        </button>
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5 text-zinc-300">
+          <AlertCircle size={26} />
+        </div>
+        <h3 className="mt-5 text-xl font-black tracking-wide text-white">Booking isn&apos;t available</h3>
+        <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
+          {role === "partner"
+            ? "Partner accounts list and manage vehicles — they can't rent or ride. Use a personal account to book."
+            : "Admin accounts manage the platform and can't place bookings."}
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-7 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-black transition hover:scale-105"
+        >
+          Got it
+        </button>
       </div>
     );
   }
@@ -345,7 +417,7 @@ function BookingForm({
             {vehicle.type} • {vehicle.transmission} • {vehicle.fuel}
           </p>
           <p className="mt-2 text-sm font-bold text-zinc-200">
-            ${vehicle.pricePerDay}{" "}
+            ₹{vehicle.pricePerDay}{" "}
             <span className="text-xs font-normal text-zinc-400">/ day</span>
           </p>
         </div>
@@ -368,7 +440,7 @@ function BookingForm({
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleStartChange(e.target.value)}
               min={minDate} // can't pick a past date
               required
               className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-xs text-white outline-none focus:border-white/30"
@@ -405,16 +477,24 @@ function BookingForm({
           </div>
           <div className="flex justify-between text-xs text-zinc-400">
             <span className="flex items-center gap-1.5">
-              <DollarSign size={13} /> Daily Rate
+              <IndianRupee size={13} /> Daily Rate
             </span>
-            <span className="font-semibold text-white">${vehicle.pricePerDay}</span>
+            <span className="font-semibold text-white">₹{vehicle.pricePerDay}</span>
           </div>
           <div className="my-1 h-px bg-white/5" />
           <div className="flex justify-between text-sm">
             <span className="font-bold text-zinc-200">Total Price</span>
-            <span className="text-lg font-black text-white">${total}</span>
+            <span className="text-lg font-black text-white">₹{total}</span>
           </div>
         </div>
+      )}
+
+      {/* If the range is invalid, explain why the button below is disabled. */}
+      {days <= 0 && (
+        <p className="flex items-center gap-2 text-xs text-zinc-500">
+          <AlertCircle size={14} className="shrink-0" />
+          Pick a return date after your pick-up date to see the price.
+        </p>
       )}
 
       {/* Cancel and Confirm buttons. The confirm button's label changes based on
@@ -440,7 +520,7 @@ function BookingForm({
           ) : !session ? (
             "Login to Book"
           ) : razorpayEnabled ? (
-            `Pay $${total} & Book`
+            `Pay ₹${total} & Book`
           ) : (
             "Confirm Reservation"
           )}
@@ -458,6 +538,32 @@ export default function BookingModal({ open, onClose, vehicle }: BookingModalPro
   // When a logged-out user tries to book, we hide the booking popup and show
   // the login popup instead. This state tracks that switch.
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  // A handle on the popup box so we can move keyboard focus into it on open.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // The booking dialog is actually on screen only when it's open, a vehicle is
+  // chosen, and we're not currently showing the login prompt over it.
+  const dialogOpen = open && !showLoginPrompt && Boolean(vehicle);
+
+  // While the dialog is open: close on Escape, lock the page behind it so it
+  // doesn't scroll, and move focus into the panel (accessibility). Everything is
+  // undone on close via the cleanup function. This effect must run on every
+  // render (hooks can't sit below an early return), so it guards on dialogOpen.
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [dialogOpen, onClose]);
 
   if (!vehicle) return null; // nothing to book -> draw nothing
 
@@ -477,12 +583,19 @@ export default function BookingModal({ open, onClose, vehicle }: BookingModalPro
               className="absolute inset-0 bg-black/85 backdrop-blur-md"
             />
 
-            {/* The popup box */}
+            {/* The popup box. role/aria-modal mark it as a dialog for assistive
+                tech; tabIndex makes it focusable so we can move focus into it;
+                max-h + overflow-y-auto keep it usable on short screens. */}
             <motion.div
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Book ${vehicle.brand} ${vehicle.model}`}
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/90 shadow-2xl backdrop-blur-xl"
+              className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-zinc-950/90 shadow-2xl outline-none backdrop-blur-xl"
             >
               {/* key={vehicle._id} resets the form when a different vehicle is
                   chosen, so dates/price/result don't carry over. */}

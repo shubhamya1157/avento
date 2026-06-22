@@ -26,9 +26,23 @@
 // "use") that lets a component remember a value between redraws. When that value
 // changes, React automatically re-draws the screen to match.
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, CheckCircle2 } from "lucide-react";
+
+// The official multi-colour Google "G" mark, as an inline SVG so it needs no
+// extra file or icon package. Used on the "Continue with Google" button.
+function GoogleIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8a12 12 0 1 1 0-24c3.1 0 5.9 1.2 8 3.1l5.7-5.7A20 20 0 1 0 24 44a20 20 0 0 0 19.6-23.5Z"/>
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8A12 12 0 0 1 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7A20 20 0 0 0 6.3 14.7Z"/>
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2A12 12 0 0 1 12.7 28l-6.6 5.1A20 20 0 0 0 24 44Z"/>
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 0 1-4.1 5.6l6.2 5.2C39.8 36 44 30.6 44 24c0-1.2-.1-2.4-.4-3.5Z"/>
+    </svg>
+  );
+}
 
 // These "type" lines list the only allowed values for our two mode trackers,
 // so a typo like "signin" would be caught immediately by the editor.
@@ -71,8 +85,23 @@ function AuthModalPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // `router` lets us send the user to another page in code (e.g. straight to the
+  // admin panel after an admin signs in).
+  const router = useRouter();
+
   const handleClose = () => {
     onClose();
+  };
+
+  // Called right after a successful email/password login. We ask the server for
+  // the fresh session so we can read the user's role: admins are taken straight
+  // to the admin panel, everyone else just stays where they are (popup closes).
+  const finishLogin = async () => {
+    const session = await getSession();
+    handleClose();
+    if (session?.user?.role === "admin") {
+      router.push("/admin");
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -108,7 +137,7 @@ function AuthModalPanel({
         return;
       }
 
-      handleClose(); // logged in — close the popup
+      await finishLogin(); // logged in — close the popup (admins go to /admin)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -190,7 +219,7 @@ function AuthModalPanel({
         });
 
         if (result?.ok) {
-          handleClose();
+          await finishLogin(); // admins land on /admin, others just close
         }
       }, 1500);
     } catch (err) {
@@ -248,29 +277,29 @@ function AuthModalPanel({
 
       {/* The heading + subtitle, whose text changes for each screen */}
       <div className="mb-6 space-y-1.5">
-        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-          AVENTO CLUB ACCESS
+        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">
+          AVENTO
         </span>
-        <h2 className="text-2xl font-black tracking-tight text-white uppercase">
+        <h2 className="text-2xl font-bold tracking-tight text-white">
           {/* A "ternary" (condition ? A : B) is a compact if/else: it shows A
               when the condition is true, otherwise B. Chaining them picks one
               of several headings depending on which screen we're on. */}
           {mode === "login"
-            ? "RE-ESTABLISH CONNECTION"
+            ? "Welcome back"
             : signupStep === "form"
-            ? "JOIN THE COLLECTIVE"
+            ? "Create your account"
             : signupStep === "otp"
-            ? "VERIFY YOUR EMAIL"
-            : "ACCESS GRANTED"}
+            ? "Verify your email"
+            : "You're all set"}
         </h2>
-        <p className="text-xs text-zinc-400 leading-relaxed font-light">
+        <p className="text-sm text-zinc-400 leading-relaxed">
           {mode === "login"
-            ? "Enter your credentials to access your personal dashboard and bookings."
+            ? "Sign in to access your bookings and dashboard."
             : signupStep === "form"
-            ? "Register access keys to unlock immediate booking across our luxury fleet."
+            ? "Sign up to start booking from our fleet."
             : signupStep === "otp"
-            ? "Enter the 6-digit code sent to your email."
-            : "Your account has been created and verified successfully!"}
+            ? "Enter the 6-digit code we sent to your email."
+            : "Your account has been created successfully."}
         </p>
       </div>
 
@@ -286,8 +315,8 @@ function AuthModalPanel({
         // ===== LOGIN FORM =====
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Email / Member ID
+            <label className="text-xs font-semibold text-zinc-400">
+              Email
             </label>
             {/* A "controlled input": its value comes from state (email), and
                 onChange updates that state on every keystroke. */}
@@ -296,14 +325,14 @@ function AuthModalPanel({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="e.g. shubhamya.1157@gmail.com"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8"
+              placeholder="you@example.com"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all focus:border-white/20 focus:bg-white/8"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Password / Passphrase
+            <label className="text-xs font-semibold text-zinc-400">
+              Password
             </label>
             <input
               type="password" // hides the characters as dots
@@ -312,7 +341,7 @@ function AuthModalPanel({
               required
               minLength={6}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all focus:border-white/20 focus:bg-white/8"
             />
           </div>
 
@@ -323,43 +352,43 @@ function AuthModalPanel({
           >
             {/* Show a spinning icon while loading */}
             {loading && <Loader2 size={16} className="animate-spin" />}
-            INITIATE SESSION
+            Sign in
           </button>
         </form>
       ) : signupStep === "form" ? (
         // ===== SIGN-UP STEP 1: details form =====
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Full Name
+            <label className="text-xs font-semibold text-zinc-400">
+              Full name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              placeholder="e.g. Shubham Yadav"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8"
+              placeholder="Your name"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all focus:border-white/20 focus:bg-white/8"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Email / Member ID
+            <label className="text-xs font-semibold text-zinc-400">
+              Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="e.g. shubhamya.1157@gmail.com"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8"
+              placeholder="you@example.com"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all focus:border-white/20 focus:bg-white/8"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Password / Passphrase
+            <label className="text-xs font-semibold text-zinc-400">
+              Password
             </label>
             <input
               type="password"
@@ -367,8 +396,8 @@ function AuthModalPanel({
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8"
+              placeholder="At least 6 characters"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all focus:border-white/20 focus:bg-white/8"
             />
           </div>
 
@@ -378,7 +407,7 @@ function AuthModalPanel({
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-sm font-bold text-black transition-all hover:bg-zinc-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            COMMISSION ACCESS
+            Create account
           </button>
         </form>
       ) : signupStep === "otp" ? (
@@ -390,8 +419,8 @@ function AuthModalPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Enter OTP (6 digits)
+            <label className="text-xs font-semibold text-zinc-400">
+              6-digit code
             </label>
             <input
               type="text"
@@ -405,7 +434,7 @@ function AuthModalPanel({
               placeholder="000000"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-lg text-white placeholder-zinc-700 outline-none transition-all focus:border-white/20 focus:bg-white/8 text-center tracking-widest font-mono"
             />
-            <p className="text-[10px] text-zinc-500">OTP expires in 10 minutes</p>
+            <p className="text-[11px] text-zinc-500">The code expires in 10 minutes.</p>
           </div>
 
           <button
@@ -415,7 +444,7 @@ function AuthModalPanel({
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-sm font-bold text-black transition-all hover:bg-zinc-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
-            VERIFY & ACTIVATE
+            Verify & continue
           </button>
 
           {/* Let the user go back to fix their details and resend a code */}
@@ -428,7 +457,7 @@ function AuthModalPanel({
             }}
             className="w-full text-xs text-zinc-400 hover:text-zinc-200 transition"
           >
-            Back to Registration
+            Back
           </button>
         </form>
       ) : (
@@ -438,35 +467,37 @@ function AuthModalPanel({
             <CheckCircle2 size={64} className="text-green-500 animate-pulse" />
           </div>
           <div className="text-center space-y-2">
-            <p className="text-sm text-zinc-300">Your account is being activated...</p>
-            <p className="text-xs text-zinc-500">Redirecting to dashboard</p>
+            <p className="text-sm text-zinc-300">Signing you in…</p>
+            <p className="text-xs text-zinc-500">Taking you to your dashboard.</p>
           </div>
         </div>
       )}
 
-      {/* The "Continue with Google" option only makes sense on the login screen */}
-      {mode === "login" && (
+      {/* "Continue with Google" — shown on the login screen and the first step of
+          sign-up (not during OTP entry or the success screen). */}
+      {(mode === "login" || (mode === "signup" && signupStep === "form")) && (
         <>
           <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-white/5" />
-            <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-600">AUTHENTICATION CHANNEL</span>
-            <div className="h-px flex-1 bg-white/5" />
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">or</span>
+            <div className="h-px flex-1 bg-white/10" />
           </div>
 
           <button
             type="button"
             // Start the Google login flow, returning home afterward.
-            onClick={() => signIn("google", { callbackUrl: "/" })}
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/10 cursor-pointer"
+            onClick={() => signIn("google", { callbackUrl: "/admin-entry" })}
+            className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 cursor-pointer"
           >
+            <GoogleIcon />
             Continue with Google
           </button>
         </>
       )}
 
       {/* The bottom link that flips between login and sign-up modes */}
-      <p className="mt-6 text-center text-xs text-zinc-500">
-        {mode === "login" ? "New to the collective?" : "Already initiated?"}{" "}
+      <p className="mt-6 text-center text-sm text-zinc-500">
+        {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
         <button
           type="button"
           onClick={() => {
@@ -478,7 +509,7 @@ function AuthModalPanel({
           }}
           className="font-semibold text-white underline underline-offset-4 hover:text-zinc-200 transition-colors cursor-pointer"
         >
-          {mode === "login" ? "Commission access keys" : "Authenticate keys"}
+          {mode === "login" ? "Sign up" : "Sign in"}
         </button>
       </p>
     </motion.div>

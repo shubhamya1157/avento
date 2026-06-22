@@ -35,6 +35,20 @@ interface UserType extends Document {
     phoneNumber?: number;  // optional contact number
     role: "user" | "partner" | "admin"; // exactly one of these three words
     emailVerified: boolean;             // true once they confirm via OTP email
+
+    // --- Partner application lifecycle (the one-time "become a partner" journey) ---
+    // A normal user APPLIES by submitting their first vehicle. The application
+    // moves through these stages; only a passed video KYC turns them into a
+    // "partner" (role above). It's tracked here, on the PERSON, because KYC is a
+    // one-time check — once approved, extra vehicles need only per-vehicle review.
+    //   none           — never applied (the default for everyone)
+    //   pending_review — submitted, waiting for an admin to check the details
+    //   kyc_pending    — details approved, waiting for / doing the video KYC call
+    //   approved       — passed KYC; role is now "partner"
+    //   rejected       — turned down (at either stage); may apply again
+    partnerStatus: "none" | "pending_review" | "kyc_pending" | "approved" | "rejected";
+    kycNote?: string;                              // admin's note (e.g. why rejected)
+    applicationVehicleId?: mongoose.Schema.Types.ObjectId; // the vehicle this application is for
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +82,18 @@ const userSchema = new mongoose.Schema<UserType>(
         emailVerified: {
             type: Boolean,
             default: false, // false until the OTP email is confirmed
+        },
+
+        // --- Partner application lifecycle (see the interface above) ---
+        partnerStatus: {
+            type: String,
+            enum: ["none", "pending_review", "kyc_pending", "approved", "rejected"],
+            default: "none", // everyone starts having never applied
+        },
+        kycNote: { type: String },
+        applicationVehicleId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "vehicleModel", // the vehicle submitted with this application
         },
     },
     // `timestamps: true` tells Mongoose to automatically add and maintain two

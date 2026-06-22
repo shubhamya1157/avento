@@ -16,6 +16,7 @@ import {
   Loader2, Clock, CheckCircle2, Users, Handshake, CalendarCheck,
   ArrowRight, CarFront,
 } from "lucide-react";
+import AdminPageHeader from "@/app/component/AdminPageHeader";
 
 // The shape of the numbers our /api/admin/stats route returns.
 interface Stats {
@@ -46,13 +47,15 @@ export default function AdminDashboardPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // The stat cards, described as data so we can render them in a loop.
+  // The stat cards, described as data so we can render them in a loop. We keep
+  // the palette monochrome on purpose — every icon sits in the same muted chip,
+  // so the NUMBERS do the talking instead of a row of competing accent colours.
   const cards = [
-    { label: "Pending requests", value: stats?.pending, icon: Clock, accent: "text-amber-400" },
-    { label: "Approved vehicles", value: stats?.approved, icon: CheckCircle2, accent: "text-emerald-400" },
-    { label: "Partners", value: stats?.partners, icon: Handshake, accent: "text-sky-400" },
-    { label: "Total users", value: stats?.users, icon: Users, accent: "text-violet-400" },
-    { label: "Total bookings", value: stats?.bookings, icon: CalendarCheck, accent: "text-rose-400" },
+    { label: "Pending requests", value: stats?.pending, icon: Clock },
+    { label: "Approved vehicles", value: stats?.approved, icon: CheckCircle2 },
+    { label: "Partners", value: stats?.partners, icon: Handshake },
+    { label: "Total users", value: stats?.users, icon: Users },
+    { label: "Total bookings", value: stats?.bookings, icon: CalendarCheck },
   ];
 
   // The quick-action cards linking to the other admin sections.
@@ -80,10 +83,11 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-10">
-      <div className="space-y-2">
-        <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">Control room</span>
-        <h1 className="text-3xl font-black tracking-wide md:text-4xl">Dashboard</h1>
-      </div>
+      <AdminPageHeader
+        eyebrow="Control room"
+        title="Dashboard"
+        description="A quick pulse of the platform and shortcuts into every section."
+      />
 
       {error && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
@@ -91,10 +95,13 @@ export default function AdminDashboardPage() {
 
       {/* Stat cards. While stats load, each value shows a small spinner. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map(({ label, value, icon: Icon, accent }) => (
-          <div key={label} className="rounded-3xl border border-white/10 bg-zinc-950/60 p-6">
-            <Icon size={20} className={accent} />
-            <p className="mt-4 text-3xl font-black">
+        {cards.map(({ label, value, icon: Icon }) => (
+          <div key={label} className="rounded-3xl border border-white/10 bg-zinc-950/60 p-6 transition hover:border-white/20">
+            {/* A uniform muted chip around every icon keeps the row monochrome. */}
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+              <Icon size={18} className="text-zinc-300" />
+            </div>
+            <p className="mt-4 text-3xl font-bold">
               {value === undefined ? <Loader2 size={20} className="animate-spin text-zinc-600" /> : value}
             </p>
             <p className="mt-1 text-xs uppercase tracking-wider text-zinc-500">{label}</p>
@@ -114,7 +121,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center justify-between">
                 <Icon className="text-zinc-300" />
                 {badge && (
-                  <span className="rounded-full bg-amber-500/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
                     {badge}
                   </span>
                 )}

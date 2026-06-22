@@ -44,7 +44,7 @@ import type { Booking } from "@/app/lib/types";
 import BookingChat from "@/app/component/BookingChat";
 // The live video call / KYC panel for the same booking.
 import VideoCall from "@/app/component/VideoCall";
-import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle, MessageSquare, Video, Navigation } from "lucide-react";
+import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle, MessageSquare, Video, Navigation, MapPin, Flag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Helper: turn a stored date string into a friendly label like "Jun 16, 2026".
@@ -85,6 +85,7 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadedForSession, setLoadedForSession] = useState(false); // first fetch done?
   const [cancellingId, setCancellingId] = useState<string | null>(null); // which booking is mid-cancel
+  const [completingId, setCompletingId] = useState<string | null>(null); // which ride is mid-complete
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false); // login popup open?
   // The booking whose chat panel is open (null = no chat showing).
@@ -193,6 +194,30 @@ export default function BookingsPage() {
     }
   };
 
+  // Mark a RIDE as completed (shown only on rides). Same PATCH pattern as cancel,
+  // but sends status "completed". Either party to the ride may do this, so it's
+  // handy once the rider has been dropped off.
+  //   - Input: bookingId, the ride's id.  Output: none (updates server + state).
+  const handleCompleteRide = async (bookingId: string) => {
+    setCompletingId(bookingId);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to complete ride");
+      refreshBookings(); // success -> reload so the row shows "Completed"
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
   // We're "loading" while the session is still being checked, OR while logged in
   // but the first bookings fetch hasn't finished yet. "||" means OR (either side
   // true makes it true); "&&" means AND (both sides must be true).
@@ -282,9 +307,16 @@ export default function BookingsPage() {
                     {bookings.map((booking) => {
                       // Pre-compute a few values used in this card's markup, so
                       // the JSX below stays clean and easy to read.
-                      const days = getDaysCount(booking.startDate, booking.endDate);
-                      const isCancelled = booking.status === "cancelled"; // true/false
+                      const isRide = booking.kind === "ride"; // ride vs rental
+                      const isCancelled = booking.status === "cancelled";
+                      const isCompleted = booking.status === "completed";
                       const vehicle = booking.vehicleId; // may be null (see types)
+                      // Rentals have a date range; rides don't, so only compute
+                      // the day count for rentals (and guard the optional dates).
+                      const days =
+                        !isRide && booking.startDate && booking.endDate
+                          ? getDaysCount(booking.startDate, booking.endDate)
+                          : 0;
 
                       return (
                         <motion.div
@@ -314,18 +346,27 @@ export default function BookingsPage() {
                             <div className="flex flex-wrap items-center justify-between gap-4">
                               <div>
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                                  Reservation
+                                  {isRide ? "Ride" : "Reservation"}
                                 </span>
                                 <h3 className="mt-0.5 text-xl font-bold text-white">
                                   {vehicle ? `${vehicle.brand} ${vehicle.model}` : "Unknown Vehicle"}
                                 </h3>
                               </div>
 
-                              {/* Show a red "Cancelled" badge or a green
-                                  "Confirmed" badge depending on isCancelled. */}
+                              {/* Status badge — its colour and label depend on the
+                                  booking's status (cancelled / completed / ongoing
+                                  / confirmed). */}
                               {isCancelled ? (
                                 <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
                                   <XCircle size={12} /> Cancelled
+                                </span>
+                              ) : isCompleted ? (
+                                <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                                  <Flag size={12} /> Completed
+                                </span>
+                              ) : booking.status === "ongoing" ? (
+                                <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                                  <Navigation size={12} /> On the way
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-emerald-400">
@@ -334,30 +375,57 @@ export default function BookingsPage() {
                               )}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4 text-xs text-zinc-400 sm:grid-cols-4">
-                              <div className="space-y-1">
-                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Dates</span>
-                                <span className="font-semibold text-zinc-200">
-                                  {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
-                                </span>
+                            {/* The middle details row differs by kind: a ride
+                                shows its route + distance + fare; a rental shows
+                                its dates + duration + cost. */}
+                            {isRide ? (
+                              <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4 text-xs text-zinc-400 sm:grid-cols-4">
+                                <div className="space-y-1 sm:col-span-2">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Route</span>
+                                  <span className="flex items-start gap-1.5 font-semibold text-zinc-200">
+                                    <MapPin size={12} className="mt-0.5 shrink-0" />
+                                    <span className="line-clamp-2">
+                                      {booking.pickup?.address ?? "—"} → {booking.drop?.address ?? "—"}
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Distance</span>
+                                  <span className="flex items-center gap-1 font-semibold text-zinc-200">
+                                    <Navigation size={12} /> {booking.distanceKm ?? 0} km
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Fare</span>
+                                  <span className="font-semibold text-zinc-200">₹{booking.totalAmount}</span>
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Duration</span>
-                                <span className="flex items-center gap-1 font-semibold text-zinc-200">
-                                  {/* Show "1 day" but "3 days": a tiny ternary
-                                      picks the singular or plural word. */}
-                                  <Clock size={12} /> {days} {days === 1 ? "day" : "days"}
-                                </span>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4 text-xs text-zinc-400 sm:grid-cols-4">
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Dates</span>
+                                  <span className="font-semibold text-zinc-200">
+                                    {formatDate(booking.startDate!)} - {formatDate(booking.endDate!)}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Duration</span>
+                                  <span className="flex items-center gap-1 font-semibold text-zinc-200">
+                                    {/* Show "1 day" but "3 days": a tiny ternary
+                                        picks the singular or plural word. */}
+                                    <Clock size={12} /> {days} {days === 1 ? "day" : "days"}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Cost</span>
+                                  <span className="font-semibold text-zinc-200">₹{booking.totalAmount}</span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Booked On</span>
+                                  <span className="font-semibold text-zinc-200">{formatDate(booking.createdAt)}</span>
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Cost</span>
-                                <span className="font-semibold text-zinc-200">${booking.totalAmount}</span>
-                              </div>
-                              <div className="space-y-1">
-                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Booked On</span>
-                                <span className="font-semibold text-zinc-200">{formatDate(booking.createdAt)}</span>
-                              </div>
-                            </div>
+                            )}
 
                             {/* Let the user rate a ride they actually took. Only
                                 shown for non-cancelled bookings whose vehicle is
@@ -408,10 +476,29 @@ export default function BookingsPage() {
                               <Navigation size={14} /> Track trip
                             </Link>
 
+                            {/* "Complete ride" — only on rides that are still
+                                active. Marks the ride finished once the rider has
+                                been dropped off (then it becomes reviewable). */}
+                            {isRide && !isCancelled && !isCompleted && (
+                              <button
+                                onClick={() => handleCompleteRide(booking._id)}
+                                disabled={completingId === booking._id}
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-bold text-black transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
+                              >
+                                {completingId === booking._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Flag size={14} />
+                                )}
+                                Complete ride
+                              </button>
+                            )}
+
                             {/* onClick cancels THIS booking by its id. The button
                                 disables itself while this exact row is mid-cancel
-                                (cancellingId matches its id). */}
-                            {!isCancelled && (
+                                (cancellingId matches its id). Hidden once a booking
+                                is cancelled or a ride is completed. */}
+                            {!isCancelled && !isCompleted && (
                               <button
                                 onClick={() => handleCancelBooking(booking._id)}
                                 disabled={cancellingId === booking._id}
@@ -424,7 +511,7 @@ export default function BookingsPage() {
                                 ) : (
                                   <Trash2 size={14} />
                                 )}
-                                Cancel Ride
+                                {isRide ? "Cancel ride" : "Cancel Ride"}
                               </button>
                             )}
                           </div>

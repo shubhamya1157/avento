@@ -15,6 +15,7 @@ import Link from "next/link";
 import { Loader2, AlertCircle, XCircle, CheckCircle2, MessageSquare, Video, Navigation } from "lucide-react";
 import BookingChat from "@/app/component/BookingChat";
 import VideoCall from "@/app/component/VideoCall";
+import AdminPageHeader from "@/app/component/AdminPageHeader";
 
 // The shape of a booking as /api/admin/bookings returns it. The vehicle and
 // user references are "populated" into small objects (or null if the linked
@@ -23,19 +24,27 @@ interface AdminBooking {
   _id: string;
   vehicleId: { _id: string; brand: string; model: string; type: string } | null;
   userId: { _id: string; name: string; email: string } | null;
-  startDate: string;
-  endDate: string;
+  kind?: "rental" | "ride";   // absent on old records (treated as rental)
+  startDate?: string;          // rentals only
+  endDate?: string;            // rentals only
+  pickup?: { address: string; lat: number; lng: number }; // rides only
+  drop?: { address: string; lat: number; lng: number };   // rides only
+  distanceKm?: number;         // rides only
   totalAmount: number;
-  status: "pending" | "confirmed" | "cancelled";
+  status: "pending" | "confirmed" | "cancelled" | "ongoing" | "completed";
   paid?: boolean;
   createdAt: string;
 }
 
-// Colour per booking status.
+// Monochrome chip per booking status. Brightness carries the meaning: live
+// (confirmed/ongoing) bookings are brightest, pending is a quiet outline, and a
+// finished/cancelled one fades back into the background.
 const STATUS_CLS: Record<AdminBooking["status"], string> = {
-  confirmed: "bg-emerald-500/15 text-emerald-400",
-  pending: "bg-amber-500/15 text-amber-400",
-  cancelled: "bg-red-500/15 text-red-400",
+  confirmed: "bg-white/10 text-white",
+  ongoing: "bg-white/10 text-white",
+  pending: "border border-white/15 text-zinc-300",
+  completed: "bg-white/5 text-zinc-400",
+  cancelled: "bg-white/5 text-zinc-500",
 };
 
 export default function AdminBookingsPage() {
@@ -89,10 +98,18 @@ export default function AdminBookingsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">Admin</span>
-        <h1 className="text-3xl font-black tracking-wide md:text-4xl">Bookings</h1>
-      </div>
+      <AdminPageHeader
+        eyebrow="Reservations"
+        title="Bookings"
+        description="Every reservation on the platform — open chat, jump on a call, or cancel one."
+        right={
+          !loading && bookings.length > 0 && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-zinc-300">
+              {bookings.length} total
+            </span>
+          )
+        }
+      />
 
       {error && (
         <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
@@ -116,7 +133,7 @@ export default function AdminBookingsPage() {
               <tr>
                 <th className="px-5 py-3 font-semibold">Vehicle</th>
                 <th className="px-5 py-3 font-semibold">Customer</th>
-                <th className="px-5 py-3 font-semibold">Dates</th>
+                <th className="px-5 py-3 font-semibold">Dates / Route</th>
                 <th className="px-5 py-3 font-semibold">Amount</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
                 <th className="px-5 py-3 font-semibold">Payment</th>
@@ -137,7 +154,22 @@ export default function AdminBookingsPage() {
                       </div>
                     ) : "—"}
                   </td>
-                  <td className="px-5 py-4 text-zinc-400">{fmt(b.startDate)} – {fmt(b.endDate)}</td>
+                  {/* A ride shows its pickup → drop + distance; a rental shows
+                      its date range. */}
+                  <td className="px-5 py-4 text-zinc-400">
+                    {b.kind === "ride" ? (
+                      <div className="max-w-[220px]">
+                        <p className="truncate text-zinc-200">
+                          {b.pickup?.address ?? "—"} → {b.drop?.address ?? "—"}
+                        </p>
+                        <p className="text-xs text-zinc-500">{b.distanceKm ?? 0} km · ride</p>
+                      </div>
+                    ) : b.startDate && b.endDate ? (
+                      `${fmt(b.startDate)} – ${fmt(b.endDate)}`
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-5 py-4 font-semibold text-zinc-200">₹{b.totalAmount}</td>
                   <td className="px-5 py-4">
                     <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${STATUS_CLS[b.status]}`}>
@@ -146,7 +178,7 @@ export default function AdminBookingsPage() {
                   </td>
                   <td className="px-5 py-4">
                     {b.paid ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-400"><CheckCircle2 size={14} /> Paid</span>
+                      <span className="inline-flex items-center gap-1 text-white"><CheckCircle2 size={14} /> Paid</span>
                     ) : (
                       <span className="text-zinc-500">Demo</span>
                     )}
@@ -181,7 +213,7 @@ export default function AdminBookingsPage() {
                       >
                         <Navigation size={13} /> Trip
                       </Link>
-                      {b.status !== "cancelled" && (
+                      {b.status !== "cancelled" && b.status !== "completed" && (
                         <button
                           onClick={() => cancel(b._id)}
                           disabled={actingId === b._id}

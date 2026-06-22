@@ -22,7 +22,7 @@
 import { useState } from "react";                      // useState = React's memory tool (explained below)
 import Link from "next/link";                          // Link = Next.js's fast in-app link (no full page reload)
 import { useSession, signOut } from "next-auth/react"; // login helpers: read who's logged in / log them out
-import { User, LogOut, Menu, X, Calendar, Handshake, Shield } from "lucide-react"; // ready-made icon shapes
+import { User, LogOut, Menu, X, Calendar, Handshake } from "lucide-react"; // ready-made icon shapes
 import AuthModal from "./AuthModal";                   // our own login/sign-up popup, from a sibling file
 
 // A "component" is a reusable piece of screen, written as a function that
@@ -36,6 +36,11 @@ export default function Nav() {
   // unpacking one named value out of a bigger object).
   // `session` is the logged-in user's info, or null/undefined if logged out.
   const { data: session } = useSession();
+
+  // Is the signed-in user an admin? Admins manage the platform from /admin, so
+  // we hide the customer-facing "My Bookings" and "Partner" links for them and
+  // show a single clean "Admin" link instead.
+  const isAdmin = session?.user?.role === "admin";
 
   // useState is React's MEMORY. It gives back two things in an array:
   //   [theCurrentValue, aFunctionToChangeIt]
@@ -68,6 +73,7 @@ export default function Nav() {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/vehicles", label: "Vehicles" },
+    { href: "/ride", label: "Get a Ride" },
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];
@@ -109,9 +115,8 @@ export default function Nav() {
                 {link.label}
               </Link>
             ))}
-            {/* "My Bookings" only appears when logged in. The `session && (...)`
-                trick means: if session exists, render what's in the parens. */}
-            {session && (
+            {/* "My Bookings" appears for logged-in customers (not admins). */}
+            {session && !isAdmin && (
               <Link
                 href="/bookings"
                 className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
@@ -120,23 +125,24 @@ export default function Nav() {
                 My Bookings
               </Link>
             )}
-            {/* "Become a Partner" is shown to everyone — the page itself asks
+            {/* "Become a Partner" is shown to non-admins — the page itself asks
                 guests to log in first. */}
-            <Link
-              href="/partner"
-              className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
-            >
-              <Handshake size={14} />
-              Partner
-            </Link>
-            {/* "Admin" only appears for admins. The role lives on the session
-                (set by the session callback in app/auth.ts). */}
-            {session?.user?.role === "admin" && (
+            {!isAdmin && (
+              <Link
+                href="/partner"
+                className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
+              >
+                <Handshake size={14} />
+                Partner
+              </Link>
+            )}
+            {/* "Admin" only appears for admins — a clean white pill (no icon, no
+                amber) so it sits naturally with the monochrome theme. */}
+            {isAdmin && (
               <Link
                 href="/admin"
-                className="flex items-center gap-1.5 text-sm font-medium text-amber-300/90 transition hover:text-amber-200"
+                className="rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-white/10"
               >
-                <Shield size={14} />
                 Admin
               </Link>
             )}
@@ -212,7 +218,7 @@ export default function Nav() {
                 {link.label}
               </Link>
             ))}
-            {session && (
+            {session && !isAdmin && (
               <Link
                 href="/bookings"
                 onClick={() => setMobileMenuOpen(false)}
@@ -222,21 +228,22 @@ export default function Nav() {
                 My Bookings
               </Link>
             )}
-            <Link
-              href="/partner"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
-            >
-              <Handshake size={14} />
-              Partner
-            </Link>
-            {session?.user?.role === "admin" && (
+            {!isAdmin && (
+              <Link
+                href="/partner"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-1.5 text-sm font-medium text-zinc-300 transition hover:text-white"
+              >
+                <Handshake size={14} />
+                Partner
+              </Link>
+            )}
+            {isAdmin && (
               <Link
                 href="/admin"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-1.5 text-sm font-medium text-amber-300/90 transition hover:text-amber-200"
+                className="self-start rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-white/10"
               >
-                <Shield size={14} />
                 Admin
               </Link>
             )}

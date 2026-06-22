@@ -20,22 +20,28 @@
 // app/lib/create-booking.ts for the shared rules used by the verify step.
 // ===========================================================================
 
-import { requireUser } from "@/app/lib/guards";
+import { requireCustomer } from "@/app/lib/guards";
 import { getRazorpay, isRazorpayConfigured } from "@/app/lib/razorpay";
+import { quoteRental } from "@/app/lib/rental-price";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 // ---------------------------------------------------------------------------
-// POST /api/payment/order — create a Razorpay order for the given amount.
+// POST /api/payment/order — create a Razorpay order for a rental.
 //
-// Body: { totalAmount: number }  (the price the BookingModal already worked out)
+// Body: { vehicleId, startDate, endDate }  — the rental the customer chose.
 // Reply: { orderId, amount, currency, keyId }  — everything the browser needs to
 //        open the checkout popup.
+//
+// SECURITY: the browser does NOT tell us the price. We recompute it on the
+// server with quoteRental() (days × the vehicle's pricePerDay) and charge THAT,
+// so a tampered request can't pay ₹1 for a ₹50,000 car. The booking is created
+// later in /api/payment/verify, which recomputes the very same amount.
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    // Must be logged in to start a payment (same gate as booking).
-    const { error } = await requireUser();
+    // Must be a customer to start a payment (partners/admins can't book).
+    const { error } = await requireCustomer();
     if (error) return error;
 
     // If Razorpay keys aren't set, there's no real payment to take. The browser
@@ -45,16 +51,18 @@ export async function POST(req: NextRequest) {
       return apiError("Payments are not enabled on this server", 400);
     }
 
-    const { totalAmount } = await req.json();
+    const { vehicleId, startDate, endDate } = await req.json();
 
-    // The amount must be a real, positive number before we charge anything.
-    if (typeof totalAmount !== "number" || !Number.isFinite(totalAmount) || totalAmount <= 0) {
-      return apiError("Invalid payment amount", 400);
+    // Work out the real price on the server (validates the vehicle + dates too).
+    // If anything's wrong, quoteRental hands back a clear message + status code.
+    const quote = await quoteRental({ vehicleId, startDate, endDate });
+    if (quote.amount === undefined) {
+      return apiError(quote.errorMessage, quote.errorStatus);
     }
 
     // Razorpay expects the amount in the smallest currency unit (paise for INR),
     // so we multiply by 100 and round to a whole number. (e.g. ₹250 -> 25000.)
-    const amountInPaise = Math.round(totalAmount * 100);
+    const amountInPaise = Math.round(quote.amount * 100);
 
     // Ask Razorpay to create the order. `receipt` is a free-text note for our own
     // records; Razorpay just echoes it back. We can't make a unique timestamp id

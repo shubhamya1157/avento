@@ -21,8 +21,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";        // tells us the current URL
 import { useSession, signOut } from "next-auth/react"; // who's the admin / log out
 import {
-  LayoutDashboard, CarFront, Users, CalendarCheck,
-  ExternalLink, LogOut, Menu, X, ShieldCheck,
+  LayoutDashboard, CarFront, Users, CalendarCheck, UserCheck,
+  LogOut, Menu, X,
 } from "lucide-react";
 
 // The sidebar links, kept as data so we can render them in a loop. `exact` marks
@@ -30,6 +30,7 @@ import {
 // it would also light up on /admin/users, etc., since those all start with it).
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/admin/partners", label: "Partners", icon: UserCheck },
   { href: "/admin/vehicles", label: "Approvals", icon: CarFront },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
@@ -50,12 +51,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const sidebar = (
     <div className="flex h-full flex-col">
       {/* Brand / panel title */}
-      <div className="flex items-center gap-2 px-6 py-6">
-        <ShieldCheck size={20} className="text-emerald-400" />
-        <div>
-          <p className="text-sm font-black tracking-[0.25em] text-white">AVENTO</p>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Admin panel</p>
-        </div>
+      <div className="px-6 py-6">
+        <p className="text-sm font-black tracking-[0.25em] text-white">AVENTO</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Admin panel</p>
       </div>
 
       {/* Main navigation */}
@@ -88,15 +86,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             Signed in as <span className="text-zinc-300">{session.user.name}</span>
           </p>
         )}
-        <Link
-          href="/"
-          className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-zinc-400 transition hover:bg-white/5 hover:text-white"
-        >
-          <ExternalLink size={18} /> Back to site
-        </Link>
         <button
           onClick={() => signOut({ callbackUrl: "/" })}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-zinc-400 transition hover:bg-white/5 hover:text-white"
         >
           <LogOut size={18} /> Log out
         </button>

@@ -50,6 +50,22 @@ export async function POST(req: NextRequest) {
     const { session, error } = await requireUser();
     if (error) return error;
 
+    await connectDB();
+
+    // Look up the submitter so we can branch on where they are in the partner
+    // journey. (Admins shouldn't be listing vehicles through this flow.)
+    const me = await userModel.findById(session.user.id);
+    if (!me) return apiError("Account not found", 404);
+    if (me.role === "admin") {
+      return apiError("Admins manage the fleet from the admin panel", 403);
+    }
+
+    // A user with an application already in progress can't start another — they
+    // must wait for the current one to be decided. (One application at a time.)
+    if (me.partnerStatus === "pending_review" || me.partnerStatus === "kyc_pending") {
+      return apiError("You already have an application under review", 409);
+    }
+
     const body = await req.json();
 
     // Pull out every field we expect. The vehicle details PLUS the owner's
@@ -85,8 +101,6 @@ export async function POST(req: NextRequest) {
       return apiError("Please upload at least one photo of the vehicle", 400);
     }
 
-    await connectDB();
-
     // Create the vehicle as a PENDING partner submission. It will not appear in
     // the public fleet until an admin approves it (see app/api/vehicles/route.ts).
     const vehicle = await vehicleModel.create({
@@ -110,12 +124,19 @@ export async function POST(req: NextRequest) {
       location,
     });
 
-    // Promote the submitter from "user" to "partner" (unless they're already a
-    // partner or an admin). This is what unlocks their partner dashboard view.
-    await userModel.updateOne(
-      { _id: session.user.id, role: "user" },
-      { $set: { role: "partner" } }
-    );
+    // Decide what this submission MEANS for the person:
+    //   - An approved partner is simply adding another vehicle: it just needs the
+    //     usual per-vehicle approval (no second KYC). Nothing changes about them.
+    //   - Everyone else is APPLYING to become a partner. We do NOT promote their
+    //     role here — that only happens after they pass the video KYC. We just
+    //     start their application clock at "pending_review" and remember which
+    //     vehicle it's for, so the admin/KYC steps know what to publish on pass.
+    if (me.role !== "partner") {
+      me.partnerStatus = "pending_review";
+      me.applicationVehicleId = vehicle._id;
+      me.kycNote = undefined; // clear any note from a previous rejected attempt
+      await me.save();
+    }
 
     return NextResponse.json(vehicle, { status: 201 }); // 201 = Created
   } catch (error) {

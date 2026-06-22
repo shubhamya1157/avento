@@ -20,15 +20,20 @@ import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import vehicleModel from "@/app/models/vehicle";
 import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
+import { rentalDays } from "@/app/lib/rental-price";
 
 // What the caller passes in. The `payment` part is optional — it's only present
 // for real (paid) bookings; demo bookings leave it out.
+//
+// NOTE: there is deliberately NO `totalAmount` here. The price is the server's
+// to decide (days × the vehicle's pricePerDay), so we compute it below from the
+// dates and the vehicle — never from a value the browser sent, which could be
+// tampered to underpay. (Rides work the same way; see app/lib/fare.ts.)
 interface CreateBookingInput {
   userId: string;
   vehicleId: string;
   startDate: string | Date;
   endDate: string | Date;
-  totalAmount: number;
   payment?: { paymentId: string; orderId: string }; // present only when paid for real
 }
 
@@ -38,10 +43,10 @@ type CreateBookingResult =
   | { booking?: undefined; errorMessage: string; errorStatus: number };
 
 export async function createBooking(input: CreateBookingInput): Promise<CreateBookingResult> {
-  const { userId, vehicleId, startDate, endDate, totalAmount, payment } = input;
+  const { userId, vehicleId, startDate, endDate, payment } = input;
 
   // All the core fields must be present.
-  if (!vehicleId || !startDate || !endDate || !totalAmount) {
+  if (!vehicleId || !startDate || !endDate) {
     return { errorMessage: "Missing required fields", errorStatus: 400 };
   }
 
@@ -96,6 +101,12 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
   if (overlappingBooking) {
     return { errorMessage: "This vehicle is already booked for the selected dates.", errorStatus: 400 };
   }
+
+  // The price is OURS to compute, never the browser's: days × this vehicle's
+  // pricePerDay. `rentalDays` is the same maths the live estimate uses, so what
+  // we store always matches what the customer was shown (and, for paid bookings,
+  // what /api/payment/order already charged from the identical calculation).
+  const totalAmount = rentalDays(start, end) * vehicle.pricePerDay;
 
   // All checks passed — save the booking, tied to this user. If a payment was
   // made, record it (paid:true + the Razorpay ids); otherwise it's a demo booking.

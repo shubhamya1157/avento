@@ -33,3 +33,10 @@ export function getSocket(): Socket {
 export function bookingRoom(bookingId: string): string {
   return `booking:${bookingId}`;
 }
+
+// The room name for a partner's one-to-one video KYC call. Keyed by the
+// applicant's USER id, so the admin and that applicant meet in the same room.
+// (server.js relays call events for any room string, so no server change needed.)
+export function kycRoom(userId: string): string {
+  return `kyc:${userId}`;
+}

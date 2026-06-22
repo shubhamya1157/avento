@@ -38,7 +38,10 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, Loader2, ShieldCheck } from "lu
 import { getSocket, bookingRoom } from "@/app/lib/socket-client";
 
 interface VideoCallProps {
-  bookingId: string;
+  // Either pass a bookingId (the booking call) OR an explicit room string (e.g.
+  // a KYC room from kycRoom(userId)). If both are given, `room` wins.
+  bookingId?: string;
+  room?: string;
   title: string;       // e.g. "Tesla Model S" — shown in the header
   onClose: () => void;
 }
@@ -66,7 +69,10 @@ function fmtDuration(totalSec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function VideoCall({ bookingId, title, onClose }: VideoCallProps) {
+export default function VideoCall({ bookingId, room: roomProp, title, onClose }: VideoCallProps) {
+  // The room these two browsers meet in: an explicit room (KYC) or, for a booking
+  // call, the room derived from the booking id. Same for both peers either way.
+  const room = roomProp ?? bookingRoom(bookingId ?? "");
   // The two <video> elements we paint streams into.
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -92,7 +98,6 @@ export default function VideoCall({ bookingId, title, onClose }: VideoCallProps)
   // ---- Set up the whole call once, when the panel opens. ----
   useEffect(() => {
     const socket = getSocket();
-    const room = bookingRoom(bookingId);
     let closed = false; // guards against acting after cleanup
 
     // Helper: send one signaling note to the other person via the server.
@@ -220,7 +225,7 @@ export default function VideoCall({ bookingId, title, onClose }: VideoCallProps)
       localStreamRef.current?.getTracks().forEach((t) => t.stop()); // turn the light off
       localStreamRef.current = null;
     };
-  }, [bookingId]);
+  }, [room]);
 
   // ---- Controls: flipping a track's `enabled` flag mutes/blanks it instantly. ----
   const toggleMic = () => {

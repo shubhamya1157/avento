@@ -13,6 +13,7 @@
 import { requireAdmin } from "@/app/lib/guards";
 import connectDB from "@/app/lib/db";
 import vehicleModel from "@/app/models/vehicle";
+import userModel from "@/app/models/user";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -33,6 +34,17 @@ export async function GET(req: NextRequest) {
     const query: Record<string, unknown> = { source: "partner" };
     if (statusFilter !== "all") {
       query.status = statusFilter;
+    }
+
+    // A first-time applicant's vehicle belongs to the partner-application + KYC
+    // flow (see /admin/partners), NOT this generic approvals queue — otherwise it
+    // would show in both places and an admin could approve it here, skipping KYC.
+    // So we exclude vehicles whose owner still has an application in progress.
+    const applicantIds = await userModel
+      .find({ partnerStatus: { $in: ["pending_review", "kyc_pending"] } })
+      .distinct("_id");
+    if (applicantIds.length > 0) {
+      query.ownerId = { $nin: applicantIds };
     }
 
     const vehicles = await vehicleModel.find(query).sort({ createdAt: -1 });

@@ -1,5 +1,5 @@
 // ===========================================================================
-// api/bookings/[id]/route.ts — Cancel a single booking
+// api/bookings/[id]/route.ts — Read one booking, or change its status
 // ===========================================================================
 //
 // URL pattern: "/api/bookings/SOME_ID". The folder name "[id]" is a "dynamic
@@ -7,10 +7,13 @@
 // Next.js hands it to us. So "/api/bookings/abc123" gives us id = "abc123".
 //
 // We handle PATCH here. PATCH is the HTTP method for PARTIALLY updating an
-// existing thing — in this app, flipping a booking's status to "cancelled".
+// existing thing. It supports three status changes:
+//   - "cancelled" — call off a booking. Only the BOOKER may do this.
+//   - "ongoing" / "completed" — the RIDE lifecycle (a ride is on its way, or it
+//     has finished). Either party (the rider OR the driver/owner/admin) may move
+//     a ride along, so this uses the shared booking-party check.
 // ===========================================================================
 
-import { auth } from "@/app/auth";
 import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import { requireUser } from "@/app/lib/guards";
@@ -64,10 +67,8 @@ export async function PATCH(
 ) {
   try {
     // Must be logged in.
-    const session = await auth();
-    if (!session?.user?.id) {
-      return apiError("Unauthorized", 401);
-    }
+    const { session, error } = await requireUser();
+    if (error) return error;
 
     // Get the id from the URL and the requested new status from the body.
     // `await req.json()` reads the JSON the browser sent and turns that text
@@ -75,31 +76,45 @@ export async function PATCH(
     const { id } = await context.params;
     const { status } = await req.json();
 
-    // This endpoint only supports cancelling. Any other status is rejected.
-    if (status !== "cancelled") {
+    // Only these three transitions are allowed through this endpoint.
+    if (!["cancelled", "ongoing", "completed"].includes(status)) {
       return apiError("Invalid action", 400);
     }
 
     await connectDB();
 
-    // Find the booking being cancelled.
+    // Find the booking being changed.
     const booking = await bookingModel.findById(id);
     if (!booking) {
       return apiError("Booking not found", 404);
     }
 
-    // SECURITY CHECK: make sure this booking belongs to the logged-in user, so
-    // nobody can cancel someone else's booking by guessing its id. 403 means
-    // "Forbidden" — we know who you are, but you're not allowed to do this.
-    // `.toString()` turns the stored id (a special database object) into plain
-    // text so it can be fairly compared with the logged-in user's id text.
-    // `!==` means "is NOT exactly equal to".
-    if (booking.userId.toString() !== session.user.id) {
-      return apiError("Unauthorized to update this booking", 403);
+    const myId = String(session.user.id);
+
+    if (status === "cancelled") {
+      // SECURITY CHECK: only the BOOKER may cancel, so nobody can cancel someone
+      // else's booking by guessing its id. 403 = "Forbidden" (we know who you
+      // are, but you're not allowed). `String(...)` makes the stored id plain
+      // text so it compares fairly with the logged-in user's id.
+      if (String(booking.userId) !== myId) {
+        return apiError("Unauthorized to update this booking", 403);
+      }
+    } else {
+      // "ongoing" / "completed" belong to the RIDE lifecycle only.
+      if (booking.kind !== "ride") {
+        return apiError("Only rides can be marked ongoing or completed", 400);
+      }
+      // Either party to the ride (rider OR driver/owner/admin) may move it along.
+      const access = await requireBookingParty(id, session);
+      if (access.error) return access.error;
+      // A cancelled ride can't be revived/completed.
+      if (booking.status === "cancelled") {
+        return apiError("This ride was cancelled", 400);
+      }
     }
 
-    // Flip the status and save the change back to the database.
-    booking.status = "cancelled";
+    // Apply the change and save it back to the database.
+    booking.status = status;
     await booking.save();
 
     return NextResponse.json(booking);

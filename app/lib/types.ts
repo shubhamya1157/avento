@@ -17,11 +17,33 @@
 export type VehicleType = "car" | "bike" | "suv";
 export type Transmission = "Automatic" | "Manual";
 export type FuelType = "Electric" | "Petrol" | "Diesel" | "Hybrid";
-export type BookingStatus = "pending" | "confirmed" | "cancelled";
+// A booking is either a date-range "rental" or a point-to-point "ride".
+export type BookingKind = "rental" | "ride";
+// ongoing/completed are used by the ride flow (a rental only ever sits at
+// confirmed or cancelled in this app).
+export type BookingStatus = "pending" | "confirmed" | "cancelled" | "ongoing" | "completed";
+
+// A single map point: the human-readable address plus the coordinates we
+// geocoded it to. Used for a ride's pickup and drop.
+export interface GeoPoint {
+  address: string;
+  lat: number;
+  lng: number;
+}
 // Where a vehicle came from, and how far through approval it is. A partner
 // submission is only shown to renters once an admin marks it "approved".
 export type VehicleSource = "fleet" | "partner";
 export type ApprovalStatus = "approved" | "pending" | "rejected";
+
+// How far a user is through the one-time "become a partner" journey (submit a
+// vehicle -> admin reviews details -> video KYC -> partner). Tracked on the user.
+//   none / pending_review / kyc_pending / approved / rejected.
+export type PartnerStatus =
+  | "none"
+  | "pending_review"
+  | "kyc_pending"
+  | "approved"
+  | "rejected";
 
 // ---------------------------------------------------------------------------
 // A vehicle as the frontend sees it (e.g. a card on the /vehicles page).
@@ -95,6 +117,33 @@ export interface PartnerVehicleInput {
 }
 
 // ---------------------------------------------------------------------------
+// One partner application, as the ADMIN review console sees it: the applicant's
+// own details plus the vehicle they submitted, so the admin can vet both before
+// the video KYC call. Returned by GET /api/admin/partners.
+// ---------------------------------------------------------------------------
+export interface PartnerApplication {
+  _id: string;                // the applicant USER's id (also the KYC room key)
+  name: string;
+  email: string;
+  partnerStatus: PartnerStatus;
+  kycNote?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  vehicle: Vehicle | null;    // the vehicle this application is for (if still present)
+}
+
+// ---------------------------------------------------------------------------
+// What the applicant's own /partner dashboard reads to decide what to show.
+// Returned by GET /api/partner/application.
+// ---------------------------------------------------------------------------
+export interface PartnerApplicationState {
+  role: string;               // "user" | "partner" | "admin"
+  partnerStatus: PartnerStatus;
+  kycNote?: string;
+  vehicles: Vehicle[];        // every vehicle this user has submitted
+}
+
+// ---------------------------------------------------------------------------
 // A trimmed-down vehicle that travels INSIDE a booking. When the API loads a
 // booking it "populates" (fills in) just these few vehicle fields — enough to
 // show the booking card without sending the entire vehicle record.
@@ -116,10 +165,17 @@ export interface Booking {
   // The linked vehicle's details — or null if that vehicle record is missing
   // (so the UI can show "No Vehicle Data" instead of crashing).
   vehicleId: BookingVehicle | null;
-  startDate: string;   // dates arrive from the API as text (e.g. ISO strings)
-  endDate: string;
-  totalAmount: number; // full price for the whole rental period
-  status: BookingStatus; // "pending", "confirmed" or "cancelled"
+  kind?: BookingKind;  // "rental" (default) or "ride"; absent on old records
+  // Rental dates — optional because a ride has none. They arrive as text.
+  startDate?: string;
+  endDate?: string;
+  // Ride fields — present only when kind === "ride".
+  pickup?: GeoPoint;   // where the rider is collected
+  drop?: GeoPoint;     // where the rider is dropped off
+  distanceKm?: number; // straight-line trip distance
+  fare?: number;       // computed ride price (same value as totalAmount)
+  totalAmount: number; // amount charged (rental: whole period; ride: the fare)
+  status: BookingStatus; // confirmed / cancelled / ongoing / completed …
   paid?: boolean;      // true once a real Razorpay payment was taken (false in demo mode)
   createdAt: string;   // when the booking was made ("Booked On")
 }

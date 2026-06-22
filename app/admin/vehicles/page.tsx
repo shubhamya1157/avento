@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Vehicle } from "@/app/lib/types";
 import { Loader2, CheckCircle2, XCircle, AlertCircle, MapPin, Phone, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import AdminPageHeader from "@/app/component/AdminPageHeader";
 
 // The filter tabs shown at the top of the queue.
 const FILTERS = ["pending", "approved", "rejected", "all"] as const;
@@ -75,10 +76,11 @@ export default function AdminVehiclesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">Admin</span>
-        <h1 className="text-3xl font-black tracking-wide md:text-4xl">Review submissions</h1>
-      </div>
+      <AdminPageHeader
+        eyebrow="Approvals"
+        title="Review submissions"
+        description="Approve a partner's vehicle to make it bookable, or reject it with a note."
+      />
 
           {/* Filter tabs */}
           <div className="flex flex-wrap gap-2">
@@ -174,7 +176,7 @@ export default function AdminVehiclesPage() {
                             <button
                               onClick={() => review(v._id, "approved")}
                               disabled={actingId === v._id}
-                              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-3 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 active:scale-95 disabled:opacity-50"
+                              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-bold text-black transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
                             >
                               {actingId === v._id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                               Approve
@@ -191,7 +193,7 @@ export default function AdminVehiclesPage() {
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-3 border-t border-white/5 pt-4 text-xs">
-                          <span className={`font-bold uppercase tracking-wider ${v.status === "approved" ? "text-emerald-400" : "text-red-400"}`}>
+                          <span className={`font-bold uppercase tracking-wider ${v.status === "approved" ? "text-white" : "text-zinc-500"}`}>
                             {v.status}
                           </span>
                           {v.adminNote && <span className="text-zinc-400">— {v.adminNote}</span>}

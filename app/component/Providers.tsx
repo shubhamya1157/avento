@@ -21,6 +21,8 @@ import { SessionProvider } from 'next-auth/react';
 import React from 'react';
 // The floating help chat bubble, shown on every page (see ChatWidget.tsx).
 import ChatWidget from './ChatWidget';
+// Keeps signed-in admins inside the admin panel, off the public site.
+import AdminGate from './AdminGate';
 
 // `children` is a special prop: it's whatever JSX you put BETWEEN this
 // component's opening and closing tags. In our case that's the entire page.
@@ -36,7 +38,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   // and shows up on every page of the app.
   return (
     <SessionProvider>
-      {children}
+      {/* AdminGate decides whether to show the page or bounce an admin back to
+          the panel; it wraps children so the public page can be swapped out. */}
+      <AdminGate>{children}</AdminGate>
       <ChatWidget />
     </SessionProvider>
   );
