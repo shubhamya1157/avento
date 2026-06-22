@@ -30,8 +30,19 @@ import { Loader2 } from "lucide-react";
 //   - /admin       … the panel itself (and all its sub-pages)
 //   - /trip        … live trip tracking, which admins launch from /admin/bookings
 //   - /admin-entry … the tiny post-login router that forwards admins into /admin
+//   - /vehicles    … the fleet, so an admin can pick a vehicle to book…
+//   - /ride        … …request a ride…
+//   - /bookings    … …and manage / pay for their own bookings.
+// (Admins may now book like anyone else, so the booking screens are allowed.)
 // Anything else is "public site" and gets redirected away.
-const ADMIN_ALLOWED_PREFIXES = ["/admin", "/trip", "/admin-entry"];
+const ADMIN_ALLOWED_PREFIXES = [
+  "/admin",
+  "/trip",
+  "/admin-entry",
+  "/vehicles",
+  "/ride",
+  "/bookings",
+];
 
 export default function AdminGate({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession(); // who's logged in (and is it settled yet?)

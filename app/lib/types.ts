@@ -19,9 +19,24 @@ export type Transmission = "Automatic" | "Manual";
 export type FuelType = "Electric" | "Petrol" | "Diesel" | "Hybrid";
 // A booking is either a date-range "rental" or a point-to-point "ride".
 export type BookingKind = "rental" | "ride";
-// ongoing/completed are used by the ride flow (a rental only ever sits at
-// confirmed or cancelled in this app).
-export type BookingStatus = "pending" | "confirmed" | "cancelled" | "ongoing" | "completed";
+// The booking lifecycle. The newer "request first, pay after accept" loop adds
+// requested/accepted/rejected at the front:
+//   requested = customer asked; awaiting the owner's yes/no (no money yet)
+//   accepted  = owner approved; customer can now pay to lock it in
+//   rejected  = owner declined (decisionNote may say why)
+//   confirmed = paid & locked in
+//   cancelled = called off
+//   ongoing/completed = used by the ride flow (a trip in progress / finished)
+//   pending   = legacy/awaiting (old records & non-request paths)
+export type BookingStatus =
+  | "requested"
+  | "accepted"
+  | "rejected"
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "ongoing"
+  | "completed";
 
 // A single map point: the human-readable address plus the coordinates we
 // geocoded it to. Used for a ride's pickup and drop.
@@ -175,7 +190,13 @@ export interface Booking {
   distanceKm?: number; // straight-line trip distance
   fare?: number;       // computed ride price (same value as totalAmount)
   totalAmount: number; // amount charged (rental: whole period; ride: the fare)
-  status: BookingStatus; // confirmed / cancelled / ongoing / completed …
+  status: BookingStatus; // requested / accepted / rejected / confirmed / cancelled …
+  // --- Request / accept-reject lifecycle ---
+  decisionAt?: string;   // when the owner accepted/rejected (text date)
+  decisionNote?: string; // optional reason, mainly shown on a rejection
+  // --- Ride dispatch ---
+  driverId?: string;     // the driver assigned to run a ride, if dispatched
+  dispatchedAt?: string; // when the ride was dispatched (text date)
   paid?: boolean;      // true once a real Razorpay payment was taken (false in demo mode)
   createdAt: string;   // when the booking was made ("Booked On")
 }

@@ -21,8 +21,20 @@ import Footer from "@/app/component/Footer";
 import AuthModal from "@/app/component/AuthModal";
 import BookingChat from "@/app/component/BookingChat";
 import VideoCall from "@/app/component/VideoCall";
-import { Loader2, AlertCircle, CalendarCheck, MessageSquare, ArrowLeft, CheckCircle2, XCircle, Video, Navigation } from "lucide-react";
+import { Loader2, AlertCircle, CalendarCheck, MessageSquare, ArrowLeft, CheckCircle2, XCircle, Video, Navigation, Hourglass, Ban, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+// The booking lifecycle, mirrored from the server. A request starts at
+// "requested" and the partner moves it to "accepted" or "rejected".
+type PartnerStatus =
+  | "requested"
+  | "accepted"
+  | "rejected"
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "ongoing"
+  | "completed";
 
 // The shape of a booking as /api/partner/bookings returns it (vehicle + customer
 // are "populated" into small objects, or null if a linked record was removed).
@@ -33,7 +45,8 @@ interface PartnerBooking {
   startDate: string;
   endDate: string;
   totalAmount: number;
-  status: "pending" | "confirmed" | "cancelled";
+  status: PartnerStatus;
+  decisionNote?: string; // the reason the partner gave when rejecting
   paid?: boolean;
   createdAt: string;
 }
@@ -52,6 +65,7 @@ export default function PartnerBookingsPage() {
   const [authOpen, setAuthOpen] = useState(false);
   const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
   const [call, setCall] = useState<{ id: string; title: string } | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null); // which request is mid accept/reject
 
   // Load the partner's incoming bookings once they're logged in.
   useEffect(() => {
@@ -71,6 +85,51 @@ export default function PartnerBookingsPage() {
     })();
     return () => { cancelled = true; };
   }, [status]);
+
+  // Re-fetch the list after a change (e.g. just after accepting a request) so the
+  // row's status/buttons update to match what's now on the server.
+  const refresh = async () => {
+    try {
+      const res = await fetch("/api/partner/bookings");
+      if (!res.ok) throw new Error("Failed to load your bookings");
+      setBookings(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load bookings");
+    }
+  };
+
+  // Accept or reject a customer's rental REQUEST. We PATCH the shared booking
+  // route, which checks the caller really owns the vehicle before changing it.
+  // On a rejection we ask for an optional reason and pass it along as `note` so
+  // the customer sees WHY on their My Bookings page.
+  //   - Inputs: the booking id, and the decision ("accepted" | "rejected").
+  //   - Output: none (updates the server, then refreshes the list).
+  const decide = async (id: string, decision: "accepted" | "rejected") => {
+    // For a rejection, offer a quick reason box (blank/cancel = no reason given).
+    let note: string | undefined;
+    if (decision === "rejected") {
+      const reason = window.prompt("Reason for declining (optional — the customer will see this):");
+      // prompt() returns null if they hit Cancel; treat that as "no reason".
+      note = reason ? reason : undefined;
+    }
+
+    setActingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/bookings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Could not update the request");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setActingId(null);
+    }
+  };
 
   const isLoading = status === "loading" || (status === "authenticated" && !loadedForSession);
 
@@ -162,7 +221,19 @@ export default function PartnerBookingsPage() {
                           <h3 className="text-lg font-bold">
                             {b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Unknown Vehicle"}
                           </h3>
-                          {b.status === "cancelled" ? (
+                          {b.status === "requested" ? (
+                            <span className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
+                              <Hourglass size={12} /> Awaiting your decision
+                            </span>
+                          ) : b.status === "accepted" ? (
+                            <span className="flex items-center gap-1.5 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-400">
+                              <Check size={12} /> Accepted — awaiting payment
+                            </span>
+                          ) : b.status === "rejected" ? (
+                            <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
+                              <Ban size={12} /> Declined
+                            </span>
+                          ) : b.status === "cancelled" ? (
                             <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
                               <XCircle size={12} /> Cancelled
                             </span>
@@ -176,7 +247,10 @@ export default function PartnerBookingsPage() {
                         <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3 text-xs text-zinc-400 sm:grid-cols-3">
                           <div>
                             <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Customer</span>
-                            <span className="font-semibold text-zinc-200">{b.userId?.name ?? "—"}</span>
+                            <span className="block font-semibold text-zinc-200">{b.userId?.name ?? "—"}</span>
+                            {b.userId?.email && (
+                              <span className="block truncate text-[11px] text-zinc-500">{b.userId.email}</span>
+                            )}
                           </div>
                           <div>
                             <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Dates</span>
@@ -189,7 +263,30 @@ export default function PartnerBookingsPage() {
                         </div>
                       </div>
 
-                      <div className="w-full shrink-0 md:w-auto">
+                      <div className="w-full shrink-0 md:w-44">
+                        {/* For a pending REQUEST, the partner's main job is to
+                            accept or reject it. These appear only while it's
+                            still "requested"; once decided they disappear. */}
+                        {b.status === "requested" && (
+                          <div className="mb-3 flex gap-2">
+                            <button
+                              onClick={() => decide(b._id, "accepted")}
+                              disabled={actingId === b._id}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-white px-4 py-3 text-xs font-bold text-black transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
+                            >
+                              {actingId === b._id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => decide(b._id, "rejected")}
+                              disabled={actingId === b._id}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs font-bold text-red-400 transition hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
+                            >
+                              <Ban size={14} /> Reject
+                            </button>
+                          </div>
+                        )}
+
                         <button
                           onClick={() =>
                             setChat({

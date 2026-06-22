@@ -19,9 +19,11 @@
 // checking it here is the one trustworthy place to confirm "yes, money arrived".
 // ===========================================================================
 
-import { requireCustomer } from "@/app/lib/guards";
+import { requireUser } from "@/app/lib/guards";
 import { verifyPaymentSignature, isRazorpayConfigured, refundPayment } from "@/app/lib/razorpay";
 import { createBooking } from "@/app/lib/create-booking";
+import bookingModel from "@/app/models/booking";
+import connectDB from "@/app/lib/db";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -35,7 +37,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    const { session, error } = await requireCustomer();
+    const { session, error } = await requireUser();
     if (error) return error;
 
     // Reaching here without keys means the order was never really created — refuse.
@@ -50,6 +52,9 @@ export async function POST(req: NextRequest) {
       vehicleId,
       startDate,
       endDate,
+      // In the request flow the customer pays for an EXISTING accepted booking,
+      // so the browser sends its id instead of fresh rental details.
+      bookingId,
     } = await req.json();
 
     // All three Razorpay values must be present, or there's nothing to verify.
@@ -68,8 +73,43 @@ export async function POST(req: NextRequest) {
       return apiError("Payment verification failed", 400);
     }
 
+    // -----------------------------------------------------------------------
+    // PATH A — paying for an EXISTING accepted booking (the request flow).
+    // -----------------------------------------------------------------------
+    if (bookingId) {
+      await connectDB();
+      const booking = await bookingModel.findById(bookingId);
+      if (!booking) return apiError("Booking not found", 404);
+
+      // Only the booker may pay, and only for a booking the owner has accepted.
+      if (String(booking.userId) !== String(session.user.id)) {
+        return apiError("You can't pay for this booking", 403);
+      }
+      if (booking.status !== "accepted") {
+        // Money was taken but the booking can't be confirmed (already paid,
+        // cancelled, or never accepted) — auto-refund and explain.
+        const refund = await refundPayment(razorpay_payment_id);
+        const tail = refund.ok
+          ? "Your payment has been refunded automatically — it should appear in a few days."
+          : `We couldn't auto-refund — please contact support quoting payment ID ${razorpay_payment_id}.`;
+        return apiError(`This booking isn't awaiting payment. ${tail}`, 409);
+      }
+
+      // Lock it in and record the payment.
+      booking.status = "confirmed";
+      booking.paid = true;
+      booking.paymentId = razorpay_payment_id;
+      booking.orderId = razorpay_order_id;
+      await booking.save();
+
+      return NextResponse.json(booking);
+    }
+
+    // -----------------------------------------------------------------------
+    // PATH B — legacy direct booking (create + pay in one step).
     // Payment confirmed — now create the booking through the shared helper, which
     // re-checks the dates and double-booking and records the payment ids.
+    // -----------------------------------------------------------------------
     const result = await createBooking({
       // requireUser() already guaranteed a logged-in user with an id, so the
       // `!` tells TypeScript this is definitely present (not undefined).

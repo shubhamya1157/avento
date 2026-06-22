@@ -63,18 +63,18 @@ export async function GET() {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/bookings — create a new booking for the logged-in user.
+// POST /api/bookings — send a rental REQUEST for the logged-in user.
 //
-// This is the "demo" booking path (no real payment taken). When Razorpay IS
-// configured, the browser instead goes through /api/payment/order + /verify,
-// which calls the SAME createBooking() helper after the payment succeeds. All
-// the actual booking rules (dates, availability, double-booking) live in that
-// shared helper so both paths behave identically.
+// In the "ask first, pay after accept" flow this no longer takes payment or
+// instantly confirms. It creates the booking at status "requested"; the vehicle
+// owner (or an admin) then accepts or rejects it on their bookings page, and the
+// customer pays only once it's accepted. All the date/availability rules live in
+// the shared createBooking() helper.
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    // Must be a CUSTOMER: partners and admins are blocked from booking here.
-    const { session, error } = await requireCustomer();
+    // Must be logged in (any role). Anyone signed in can book on Avento.
+    const { session, error } = await requireUser();
     if (error) return error;
 
     // Read the booking details the browser sent (JSON -> object). Note we do
@@ -83,12 +83,14 @@ export async function POST(req: NextRequest) {
     const { vehicleId, startDate, endDate } = await req.json();
 
     // Hand off to the shared helper, which validates everything and either
-    // creates the booking or returns a clear error + status code.
+    // creates the REQUEST or returns a clear error + status code. `requested`
+    // saves it at status "requested" (unpaid) instead of instantly confirming.
     const result = await createBooking({
       userId: session.user.id!,
       vehicleId,
       startDate,
       endDate,
+      requested: true,
     });
 
     if (result.errorMessage) {

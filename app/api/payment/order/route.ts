@@ -20,9 +20,11 @@
 // app/lib/create-booking.ts for the shared rules used by the verify step.
 // ===========================================================================
 
-import { requireCustomer } from "@/app/lib/guards";
+import { requireUser } from "@/app/lib/guards";
 import { getRazorpay, isRazorpayConfigured } from "@/app/lib/razorpay";
 import { quoteRental } from "@/app/lib/rental-price";
+import bookingModel from "@/app/models/booking";
+import connectDB from "@/app/lib/db";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -40,8 +42,8 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    // Must be a customer to start a payment (partners/admins can't book).
-    const { error } = await requireCustomer();
+    // Must be logged in to start a payment (any role can book).
+    const { session, error } = await requireUser();
     if (error) return error;
 
     // If Razorpay keys aren't set, there's no real payment to take. The browser
@@ -51,18 +53,37 @@ export async function POST(req: NextRequest) {
       return apiError("Payments are not enabled on this server", 400);
     }
 
-    const { vehicleId, startDate, endDate } = await req.json();
+    const { vehicleId, startDate, endDate, bookingId } = await req.json();
 
-    // Work out the real price on the server (validates the vehicle + dates too).
-    // If anything's wrong, quoteRental hands back a clear message + status code.
-    const quote = await quoteRental({ vehicleId, startDate, endDate });
-    if (quote.amount === undefined) {
-      return apiError(quote.errorMessage, quote.errorStatus);
+    // Work out the amount to charge on the server (never trust the browser).
+    //   - Request flow: pay for an EXISTING accepted booking -> use its stored,
+    //     server-computed totalAmount (and check it's really yours + accepted).
+    //   - Legacy direct flow: price the chosen vehicle + dates with quoteRental.
+    let amount: number;
+    if (bookingId) {
+      await connectDB();
+      const booking = await bookingModel.findById(bookingId);
+      if (!booking) return apiError("Booking not found", 404);
+      if (String(booking.userId) !== String(session.user.id)) {
+        return apiError("You can't pay for this booking", 403);
+      }
+      if (booking.status !== "accepted") {
+        return apiError("This booking isn't awaiting payment", 400);
+      }
+      amount = booking.totalAmount;
+    } else {
+      // Work out the real price on the server (validates the vehicle + dates too).
+      // If anything's wrong, quoteRental hands back a clear message + status code.
+      const quote = await quoteRental({ vehicleId, startDate, endDate });
+      if (quote.amount === undefined) {
+        return apiError(quote.errorMessage, quote.errorStatus);
+      }
+      amount = quote.amount;
     }
 
     // Razorpay expects the amount in the smallest currency unit (paise for INR),
     // so we multiply by 100 and round to a whole number. (e.g. ₹250 -> 25000.)
-    const amountInPaise = Math.round(quote.amount * 100);
+    const amountInPaise = Math.round(amount * 100);
 
     // Ask Razorpay to create the order. `receipt` is a free-text note for our own
     // records; Razorpay just echoes it back. We can't make a unique timestamp id

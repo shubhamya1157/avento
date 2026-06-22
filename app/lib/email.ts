@@ -52,47 +52,74 @@ export async function sendOTPEmail(email: string, otp: string) {
     // "inline" because many email apps ignore external stylesheets.
     const mailOptions = {
       from: process.env.EMAIL_USER, // the mailbox the email is sent from
-      to: email,                    // the recipient (the new user)
+      to: email, // the recipient (the new user)
       subject: "AVENTO - Email Verification OTP",
       // The ${otp} below is a "template literal" — JavaScript drops the actual
       // code value into the HTML at that exact spot.
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0;">AVENTO CLUB</h1>
-            <p style="color: rgba(255, 255, 255, 0.8); margin: 5px 0;">Email Verification</p>
-          </div>
+        <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;"> <!-- Header --> <div style="background: #000000; padding: 48px 24px; text-align: center; border-radius: 16px 16px 0 0;"> <h1 style=" color: #ffffff; margin: 0; font-size: 34px; font-weight: 800; letter-spacing: 4px; "> Avento </h1> <p style=" color: #a3a3a3; margin: 8px 0 0; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; "> Verify Your Email </p> </div> <!-- Content --> <div style=" background: #ffffff; border: 1px solid #e5e5e5; border-top: none; padding: 40px 30px; border-radius: 0 0 16px 16px; ">
+<p style="
+  color: #111827;
+  font-size: 16px;
+  margin: 0 0 20px;
+  line-height: 1.6;
+">
+  Welcome to Avento pvt. ltd 
+</p>
 
-          <div style="background: #f8f9fa; padding: 40px 20px; border-radius: 0 0 10px 10px;">
-            <p style="color: #333; font-size: 16px; margin: 0 0 20px 0;">
-              Thank you for registering with AVENTO Club!
-            </p>
+<p style="
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0 0 30px;
+  line-height: 1.6;
+">
+  Enter the verification code below to complete your account setup.
+</p>
 
-            <p style="color: #666; font-size: 14px; margin: 0 0 30px 0;">
-              Your One-Time Password (OTP) for email verification is:
-            </p>
+<!-- OTP -->
+<div style="
+  background: #fafafa;
+  border: 2px solid #000000;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  margin: 30px 0;
+">
+  <span style="
+    color: #000000;
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: 12px; 
+  font-family: monospace;
+  ">
+    ${otp}
+  </span>
+</div>
 
-            <div style="background: white; padding: 20px; text-align: center; border-radius: 8px; border: 2px solid #667eea; margin: 20px 0;">
-              <p style="font-size: 32px; font-weight: bold; color: #667eea; margin: 0; letter-spacing: 5px;">
-                ${otp}
-              </p>
-            </div>
+<p style="
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+">
+  This code expires in 10 minutes. Never share it with anyone.
+</p>
 
-            <p style="color: #999; font-size: 12px; margin: 20px 0 0 0;">
-              This OTP will expire in 10 minutes. Do not share this code with anyone.
-            </p>
-
-            <p style="color: #666; font-size: 14px; margin: 20px 0 0 0;">
-              If you didn't register for AVENTO Club, please ignore this email.
-            </p>
-
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center;">
-              <p style="color: #999; font-size: 12px; margin: 0;">
-                © 2024 AVENTO Club. All rights reserved.
-              </p>
-            </div>
-          </div>
-        </div>
+<div style="
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e5e5;
+  text-align: center;
+">
+  <p style="
+    color: #9ca3af;
+    font-size: 12px;
+    margin: 0;
+  ">
+    © 2026 Avento pvt. ltd. All rights reserved.
+  </p>
+</div>
+</div> </div>
       `,
     };
 

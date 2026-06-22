@@ -57,9 +57,38 @@ export interface BookingType extends Document {
 
     totalAmount: number; // amount charged (rental: days × pricePerDay; ride: fare)
     // The `|` here is a "union type": status must be EXACTLY one of these
-    // words. pending = awaiting action, confirmed = locked in, cancelled =
-    // called off, ongoing = ride in progress, completed = ride finished.
-    status: "pending" | "confirmed" | "cancelled" | "ongoing" | "completed";
+    // words. The lifecycle now has a "request first, pay after accept" loop:
+    //   requested = customer asked, awaiting the owner's decision (no money yet)
+    //   accepted  = owner said yes; the customer may now pay to lock it in
+    //   rejected  = owner said no (see decisionNote for why); customer can re-ask
+    //   confirmed = paid & locked in
+    //   cancelled = called off
+    //   ongoing   = ride/trip in progress
+    //   completed = trip finished
+    //   pending   = legacy/awaiting (kept for old records & non-request paths)
+    status:
+        | "requested"
+        | "accepted"
+        | "rejected"
+        | "pending"
+        | "confirmed"
+        | "cancelled"
+        | "ongoing"
+        | "completed";
+
+    // --- Request / accept-reject lifecycle (added for the request loop) ---
+    // Who made the accept/reject call (the vehicle's partner-owner, or an admin),
+    // when they made it, and an optional note (mainly a reason on rejection).
+    decisionBy?: mongoose.Schema.Types.ObjectId;
+    decisionAt?: Date;
+    decisionNote?: string;
+
+    // --- Ride dispatch (added for live-GPS dispatch) ---
+    // The driver assigned to actually run a ride, and when they were dispatched.
+    // For a partner-owned vehicle the driver is usually the owner; an admin can
+    // also dispatch. Live GPS for the trip is keyed off the booking id elsewhere.
+    driverId?: mongoose.Schema.Types.ObjectId;
+    dispatchedAt?: Date;
 
     // --- Payment fields (added for the Razorpay feature) ---
     // `paid` is true once money has actually been taken. In "demo mode" (no
@@ -120,9 +149,36 @@ const bookingSchema = new mongoose.Schema<BookingType>(
         status: {
             type: String,
             required: true,
-            enum: ["pending", "confirmed", "cancelled", "ongoing", "completed"],
-            default: "confirmed", // in this app a new booking is confirmed at once
+            enum: [
+                "requested",
+                "accepted",
+                "rejected",
+                "pending",
+                "confirmed",
+                "cancelled",
+                "ongoing",
+                "completed",
+            ],
+            // Default stays "confirmed" so any code path that doesn't set a
+            // status explicitly keeps the old instant-confirm behaviour. The
+            // request loop passes status:"requested" in on purpose.
+            default: "confirmed",
         },
+
+        // --- Request / accept-reject lifecycle (see the interface above) ---
+        decisionBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "userModel",
+        },
+        decisionAt: { type: Date },
+        decisionNote: { type: String },
+
+        // --- Ride dispatch (see the interface above) ---
+        driverId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "userModel",
+        },
+        dispatchedAt: { type: Date },
 
         // --- Payment fields (see the interface above) ---
         paid: {

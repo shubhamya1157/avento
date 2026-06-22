@@ -14,7 +14,7 @@
 // ===========================================================================
 
 import { createRide } from "@/app/lib/create-ride";
-import { requireCustomer } from "@/app/lib/guards";
+import { requireUser } from "@/app/lib/guards";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -25,8 +25,8 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    // Must be a CUSTOMER: partners and admins are blocked from booking rides.
-    const { session, error } = await requireCustomer();
+    // Must be logged in (any role). Anyone signed in can book a ride on Avento.
+    const { session, error } = await requireUser();
     if (error) return error;
 
     const { vehicleId, pickup, drop } = await req.json();

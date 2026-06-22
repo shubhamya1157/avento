@@ -35,6 +35,13 @@ interface CreateBookingInput {
   startDate: string | Date;
   endDate: string | Date;
   payment?: { paymentId: string; orderId: string }; // present only when paid for real
+  // When true, this is a REQUEST (the new "ask first, pay after the owner says
+  // yes" flow): the booking is saved as status "requested" and unpaid, and we
+  // DON'T hard-block on overlapping dates — several customers may request the
+  // same days, and the owner picks one. The real "is this slot still free?"
+  // check happens at accept time (see the accept handler in
+  // app/api/bookings/[id]/route.ts), where "accepted" counts as taken.
+  requested?: boolean;
 }
 
 // The shape we hand back: exactly one of `booking` or the error pair is filled.
@@ -43,7 +50,7 @@ type CreateBookingResult =
   | { booking?: undefined; errorMessage: string; errorStatus: number };
 
 export async function createBooking(input: CreateBookingInput): Promise<CreateBookingResult> {
-  const { userId, vehicleId, startDate, endDate, payment } = input;
+  const { userId, vehicleId, startDate, endDate, payment, requested } = input;
 
   // All the core fields must be present.
   if (!vehicleId || !startDate || !endDate) {
@@ -88,18 +95,25 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
     return { errorMessage: "Vehicle is currently not available for rent", errorStatus: 400 };
   }
 
-  // Rule 3: prevent double-booking. Look for any existing, non-cancelled booking
-  // for this vehicle whose date range OVERLAPS the requested one. Two ranges
-  // overlap when: existing.start <= new.end AND existing.end >= new.start.
-  const overlappingBooking = await bookingModel.findOne({
-    vehicleId,
-    status: { $ne: "cancelled" },
-    startDate: { $lte: end },
-    endDate: { $gte: start },
-  });
+  // Rule 3: prevent double-booking — but ONLY for a real (already-decided)
+  // booking. A plain REQUEST skips this so several customers may ask for the same
+  // dates; the owner's accept is where the slot is actually claimed.
+  //
+  // A range is "taken" only by a booking that's locked the slot: accepted (owner
+  // said yes), confirmed (paid), or ongoing. requested / rejected / cancelled
+  // bookings leave the dates open. Two ranges overlap when
+  // existing.start <= new.end AND existing.end >= new.start.
+  if (!requested) {
+    const overlappingBooking = await bookingModel.findOne({
+      vehicleId,
+      status: { $in: ["accepted", "confirmed", "ongoing"] },
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    });
 
-  if (overlappingBooking) {
-    return { errorMessage: "This vehicle is already booked for the selected dates.", errorStatus: 400 };
+    if (overlappingBooking) {
+      return { errorMessage: "This vehicle is already booked for the selected dates.", errorStatus: 400 };
+    }
   }
 
   // The price is OURS to compute, never the browser's: days × this vehicle's
@@ -108,15 +122,17 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
   // what /api/payment/order already charged from the identical calculation).
   const totalAmount = rentalDays(start, end) * vehicle.pricePerDay;
 
-  // All checks passed — save the booking, tied to this user. If a payment was
-  // made, record it (paid:true + the Razorpay ids); otherwise it's a demo booking.
+  // All checks passed — save the booking, tied to this user.
+  //   - A REQUEST starts at status "requested", unpaid, awaiting the owner.
+  //   - Otherwise it's the legacy direct path: "confirmed", and paid:true if a
+  //     real payment came with it (else a demo booking).
   const booking = await bookingModel.create({
     userId,
     vehicleId,
     startDate: start,
     endDate: end,
     totalAmount,
-    status: "confirmed",
+    status: requested ? "requested" : "confirmed",
     paid: Boolean(payment),
     paymentId: payment?.paymentId,
     orderId: payment?.orderId,

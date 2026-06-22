@@ -261,17 +261,8 @@ export default function RidePage() {
       setShowLogin(true);
       return;
     }
-    // Partners and admins are staff/owners, not riders — the server blocks them
-    // (requireCustomer); surface that clearly instead of a confusing 403.
-    const role = session.user?.role;
-    if (role === "partner" || role === "admin") {
-      setError(
-        role === "partner"
-          ? "Partner accounts can't book rides. Use a personal account to ride."
-          : "Admin accounts can't book rides."
-      );
-      return;
-    }
+    // Anyone logged in can ride on Avento (a partner may want a ride too), so
+    // there's no role gate here — the server only checks you're signed in.
     if (!selected || !pickup || !drop) return;
 
     setError(null);

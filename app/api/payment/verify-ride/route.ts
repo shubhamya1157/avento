@@ -16,7 +16,7 @@
 // dates and a date-clash refund message, whereas a ride deals in pickup/drop.
 // ===========================================================================
 
-import { requireCustomer } from "@/app/lib/guards";
+import { requireUser } from "@/app/lib/guards";
 import { verifyPaymentSignature, isRazorpayConfigured, refundPayment } from "@/app/lib/razorpay";
 import { createRide } from "@/app/lib/create-ride";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
@@ -32,7 +32,7 @@ import { NextRequest, NextResponse } from "next/server";
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
-    const { session, error } = await requireCustomer();
+    const { session, error } = await requireUser();
     if (error) return error;
 
     if (!isRazorpayConfigured()) {

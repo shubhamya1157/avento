@@ -44,8 +44,11 @@ import type { Booking } from "@/app/lib/types";
 import BookingChat from "@/app/component/BookingChat";
 // The live video call / KYC panel for the same booking.
 import VideoCall from "@/app/component/VideoCall";
-import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle, MessageSquare, Video, Navigation, MapPin, Flag } from "lucide-react";
+import { Calendar, Clock, AlertCircle, Trash2, Loader2, CheckCircle2, XCircle, MessageSquare, Video, Navigation, MapPin, Flag, Hourglass, Ban, CreditCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+// Shared Razorpay browser helpers — the same ones the booking popup and the ride
+// wizard use, so the "Pay now" button here behaves identically to the rest.
+import { razorpayEnabled, loadRazorpayScript } from "@/app/lib/razorpay-client";
 
 // Helper: turn a stored date string into a friendly label like "Jun 16, 2026".
 //   - Input: dateString, a date written as text (e.g. "2026-06-16").
@@ -86,6 +89,7 @@ export default function BookingsPage() {
   const [loadedForSession, setLoadedForSession] = useState(false); // first fetch done?
   const [cancellingId, setCancellingId] = useState<string | null>(null); // which booking is mid-cancel
   const [completingId, setCompletingId] = useState<string | null>(null); // which ride is mid-complete
+  const [payingId, setPayingId] = useState<string | null>(null); // which accepted booking is mid-payment
   const [error, setError] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false); // login popup open?
   // The booking whose chat panel is open (null = no chat showing).
@@ -218,6 +222,101 @@ export default function BookingsPage() {
     }
   };
 
+  // Pay for an ACCEPTED booking (the "pay after the owner accepts" step). In the
+  // new request flow no money is taken up front: the customer sends a request,
+  // the owner accepts, and only THEN does this button appear so they can pay.
+  //   - With Razorpay configured: create an order for this booking, open the
+  //     checkout popup, then verify the payment on our server.
+  //   - In demo mode (no keys): just PATCH the booking to "confirmed".
+  // Either way the booking moves accepted -> confirmed and the list refreshes.
+  //   - Input: the booking to pay for.  Output: none (updates server + state).
+  const handlePay = async (booking: Booking) => {
+    setPayingId(booking._id);
+    setError(null);
+
+    try {
+      // --- Demo mode: no real payment gateway, so just confirm the booking. ---
+      if (!razorpayEnabled) {
+        const res = await fetch(`/api/bookings/${booking._id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "confirmed" }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Could not confirm booking");
+        await refreshBookings();
+        setPayingId(null);
+        return;
+      }
+
+      // --- Real payment: ask our server to create a Razorpay order for THIS
+      //     booking (it prices from the stored, server-computed amount). ---
+      const orderRes = await fetch("/api/payment/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: booking._id }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.message || "Could not start payment");
+
+      // Make sure Razorpay's checkout script is on the page (no-op if loaded).
+      const ready = await loadRazorpayScript();
+      if (!ready || !window.Razorpay) {
+        throw new Error("Could not load the payment gateway. Check your connection.");
+      }
+
+      const vehicle = booking.vehicleId;
+      const razorpay = new window.Razorpay({
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "Avento",
+        description: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Avento booking",
+        prefill: {
+          name: session?.user?.name || "",
+          email: session?.user?.email || "",
+        },
+        theme: { color: "#ffffff" },
+        // Razorpay calls this AFTER a successful payment; we verify it server-side
+        // and, on success, the server flips the booking to "confirmed".
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const verifyRes = await fetch("/api/payment/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              // Send Razorpay's signed result PLUS the booking id so the server
+              // knows which accepted booking to confirm.
+              body: JSON.stringify({ ...response, bookingId: booking._id }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verifyData.message || "Payment could not be verified");
+            await refreshBookings();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Payment verification failed.");
+          } finally {
+            setPayingId(null);
+          }
+        },
+        modal: {
+          // If they close the popup without paying, re-enable the button.
+          ondismiss: () => {
+            setPayingId(null);
+            setError("Payment cancelled — you can try again whenever you're ready.");
+          },
+        },
+      });
+      razorpay.open();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong while paying");
+      setPayingId(null);
+    }
+  };
+
   // We're "loading" while the session is still being checked, OR while logged in
   // but the first bookings fetch hasn't finished yet. "||" means OR (either side
   // true makes it true); "&&" means AND (both sides must be true).
@@ -310,6 +409,18 @@ export default function BookingsPage() {
                       const isRide = booking.kind === "ride"; // ride vs rental
                       const isCancelled = booking.status === "cancelled";
                       const isCompleted = booking.status === "completed";
+                      // The new request-loop states: waiting on the owner,
+                      // accepted (ready to pay), or declined by the owner.
+                      const isRequested = booking.status === "requested";
+                      const isAccepted = booking.status === "accepted";
+                      const isRejected = booking.status === "rejected";
+                      // "Live" = the booking has actually been paid/locked in or
+                      // is in progress, i.e. the customer is using (or used) the
+                      // vehicle. Only then do chat/track/review/complete apply.
+                      const isLive =
+                        booking.status === "confirmed" ||
+                        booking.status === "ongoing" ||
+                        isCompleted;
                       const vehicle = booking.vehicleId; // may be null (see types)
                       // Rentals have a date range; rides don't, so only compute
                       // the day count for rentals (and guard the optional dates).
@@ -354,9 +465,23 @@ export default function BookingsPage() {
                               </div>
 
                               {/* Status badge — its colour and label depend on the
-                                  booking's status (cancelled / completed / ongoing
-                                  / confirmed). */}
-                              {isCancelled ? (
+                                  booking's status. The request loop adds three
+                                  new states up front: requested (waiting on the
+                                  owner, amber), accepted (ready to pay, sky), and
+                                  rejected (declined, red). */}
+                              {isRequested ? (
+                                <span className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
+                                  <Hourglass size={12} /> Waiting for approval
+                                </span>
+                              ) : isAccepted ? (
+                                <span className="flex items-center gap-1.5 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-400">
+                                  <CheckCircle2 size={12} /> Accepted — pay now
+                                </span>
+                              ) : isRejected ? (
+                                <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
+                                  <Ban size={12} /> Declined
+                                </span>
+                              ) : isCancelled ? (
                                 <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
                                   <XCircle size={12} /> Cancelled
                                 </span>
@@ -427,10 +552,21 @@ export default function BookingsPage() {
                               </div>
                             )}
 
+                            {/* If the owner declined, show their reason (if any)
+                                so the customer understands why. */}
+                            {isRejected && booking.decisionNote && (
+                              <p className="flex items-start gap-2 rounded-xl border border-red-500/15 bg-red-500/5 p-3 text-xs text-red-300">
+                                <Ban size={13} className="mt-0.5 shrink-0" />
+                                <span>{booking.decisionNote}</span>
+                              </p>
+                            )}
+
                             {/* Let the user rate a ride they actually took. Only
-                                shown for non-cancelled bookings whose vehicle is
-                                still known (we need its id to post the review). */}
-                            {!isCancelled && vehicle && (
+                                shown once the booking is LIVE (confirmed/ongoing/
+                                completed) and the vehicle is still known (we need
+                                its id to post the review) — you can't review a
+                                booking that's only been requested or was declined. */}
+                            {isLive && vehicle && (
                               <ReviewControl
                                 vehicleId={vehicle._id}
                                 vehicleName={`${vehicle.brand} ${vehicle.model}`}
@@ -438,48 +574,74 @@ export default function BookingsPage() {
                             )}
                           </div>
 
-                          {/* Action buttons. "Message" opens the live chat with
-                              the vehicle's owner (always available). "Cancel Ride"
-                              only shows while the booking isn't already cancelled. */}
+                          {/* Action buttons. Which ones show depends on the
+                              booking's stage in the request loop. */}
                           <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
-                            <button
-                              onClick={() =>
-                                setChat({
-                                  id: booking._id,
-                                  title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
-                                })
-                              }
-                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                            >
-                              <MessageSquare size={14} /> Message
-                            </button>
+                            {/* "Pay now" — the headline action once the owner has
+                                ACCEPTED. Opens Razorpay (or demo-confirms) and
+                                moves the booking accepted -> confirmed. */}
+                            {isAccepted && (
+                              <button
+                                onClick={() => handlePay(booking)}
+                                disabled={payingId === booking._id}
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-bold text-black transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
+                              >
+                                {payingId === booking._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <CreditCard size={14} />
+                                )}
+                                {razorpayEnabled ? `Pay ₹${booking.totalAmount}` : "Confirm booking"}
+                              </button>
+                            )}
 
-                            {/* "Video" starts a live video call / KYC with the
-                                vehicle's owner (always available). */}
-                            <button
-                              onClick={() =>
-                                setCall({
-                                  id: booking._id,
-                                  title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
-                                })
-                              }
-                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                            >
-                              <Video size={14} /> Video
-                            </button>
+                            {/* "Message" / "Video" — talk to the owner. Useful from
+                                the moment a request is sent right through the trip,
+                                so we show them unless it was declined or called off. */}
+                            {!isRejected && !isCancelled && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setChat({
+                                      id: booking._id,
+                                      title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
+                                    })
+                                  }
+                                  className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                                >
+                                  <MessageSquare size={14} /> Message
+                                </button>
 
-                            {/* "Track trip" opens the live map for this booking. */}
-                            <Link
-                              href={`/trip/${booking._id}`}
-                              className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                            >
-                              <Navigation size={14} /> Track trip
-                            </Link>
+                                <button
+                                  onClick={() =>
+                                    setCall({
+                                      id: booking._id,
+                                      title: vehicle ? `${vehicle.brand} ${vehicle.model}` : "Booking",
+                                    })
+                                  }
+                                  className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                                >
+                                  <Video size={14} /> Video
+                                </button>
+                              </>
+                            )}
+
+                            {/* "Track trip" — only meaningful once the booking is
+                                LIVE (paid/in-progress), so hidden while it's still
+                                just a request or was declined. */}
+                            {isLive && (
+                              <Link
+                                href={`/trip/${booking._id}`}
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                              >
+                                <Navigation size={14} /> Track trip
+                              </Link>
+                            )}
 
                             {/* "Complete ride" — only on rides that are still
                                 active. Marks the ride finished once the rider has
                                 been dropped off (then it becomes reviewable). */}
-                            {isRide && !isCancelled && !isCompleted && (
+                            {isRide && isLive && !isCompleted && (
                               <button
                                 onClick={() => handleCompleteRide(booking._id)}
                                 disabled={completingId === booking._id}
@@ -494,11 +656,13 @@ export default function BookingsPage() {
                               </button>
                             )}
 
-                            {/* onClick cancels THIS booking by its id. The button
-                                disables itself while this exact row is mid-cancel
-                                (cancellingId matches its id). Hidden once a booking
-                                is cancelled or a ride is completed. */}
-                            {!isCancelled && !isCompleted && (
+                            {/* Withdraw / cancel THIS booking. The booker may back
+                                out at any pre-completion stage (a pending request,
+                                an accepted-but-unpaid booking, or a confirmed one).
+                                Hidden once it's already declined, cancelled, or a
+                                ride has completed. The label reads "Withdraw" while
+                                it's still just a request, else "Cancel". */}
+                            {!isRejected && !isCancelled && !isCompleted && (
                               <button
                                 onClick={() => handleCancelBooking(booking._id)}
                                 disabled={cancellingId === booking._id}
@@ -511,7 +675,7 @@ export default function BookingsPage() {
                                 ) : (
                                   <Trash2 size={14} />
                                 )}
-                                {isRide ? "Cancel ride" : "Cancel Ride"}
+                                {isRequested ? "Withdraw request" : "Cancel booking"}
                               </button>
                             )}
                           </div>
