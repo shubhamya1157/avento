@@ -23,6 +23,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from "react";
+// usePathname tells us which URL we're on right now, so we can hide the widget
+// inside the admin panel (admins manage the platform — they don't need the
+// customer help bot floating over their dashboard).
+import { usePathname } from "next/navigation";
 import { X, Send } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -62,6 +66,12 @@ const QUICK_REPLIES = [
 ];
 
 export default function ChatWidget() {
+  // Hide the help bubble everywhere under "/admin". The widget is mounted once in
+  // Providers.tsx (so it shows on every page), so this per-path guard is how we
+  // keep it OFF the admin panel while leaving it on for the public site.
+  const pathname = usePathname();
+  const onAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
+
   const [open, setOpen] = useState(false); // is the panel open?
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
@@ -137,6 +147,10 @@ export default function ChatWidget() {
     e.preventDefault();
     send();
   };
+
+  // On admin pages, render nothing at all (this sits AFTER the hooks above, since
+  // React requires hooks to run on every render — we just skip the UI).
+  if (onAdmin) return null;
 
   return (
     <>

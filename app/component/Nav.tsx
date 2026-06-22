@@ -42,6 +42,10 @@ export default function Nav() {
   // show a single clean "Admin" link instead.
   const isAdmin = session?.user?.role === "admin";
 
+  // Partners and admins can't book/ride (they're owners/staff), so we don't show
+  // them the customer-facing "Get a Ride" link. The server blocks them too.
+  const canBook = !isAdmin && session?.user?.role !== "partner";
+
   // useState is React's MEMORY. It gives back two things in an array:
   //   [theCurrentValue, aFunctionToChangeIt]
   // We unpack them with [a, b] = ... . Whenever we call the change-function,
@@ -73,7 +77,8 @@ export default function Nav() {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/vehicles", label: "Vehicles" },
-    { href: "/ride", label: "Get a Ride" },
+    // "Get a Ride" only for customers (hidden from partners/admins).
+    ...(canBook ? [{ href: "/ride", label: "Get a Ride" }] : []),
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];

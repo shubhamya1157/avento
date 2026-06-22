@@ -41,8 +41,8 @@ export default function Footer() {
           strip. The form is decorative for now (see note at top of file). */}
       <div className="mx-auto max-w-7xl border-b border-white/5 pb-12 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
         <div className="max-w-md space-y-2 text-center md:text-left">
-          <h3 className="font-bold text-white text-lg tracking-tight">SUBSCRIBE TO AVENTO ELITE</h3>
-          <p className="text-xs text-zinc-500 leading-relaxed">Get private fleet availability updates, special weekend offers, and new luxury release announcements.</p>
+          <h3 className="font-bold text-white text-lg tracking-tight">SUBSCRIBE TO AVENTO</h3>
+          <p className="text-xs text-zinc-500 leading-relaxed">Get updates, special weekend offers, and new luxury release announcements.</p>
         </div>
         {/* A <form> groups inputs that get "submitted" together. onSubmit runs
             when the user presses Subscribe. `e` is the event (the click itself);
@@ -82,7 +82,7 @@ export default function Footer() {
             </h2>
           </Link>
           <p className="text-xs leading-relaxed text-zinc-500 max-w-xs">
-            A curated collection of elite luxury vehicles, delivering seamless booking experiences and unforgettable journeys wherever the road leads.
+            A curated collection of luxury vehicles, delivering seamless booking experiences and unforgettable journeys wherever the road leads.
           </p>
           {/* The social icons. These use plain <a> tags (not <Link>) because
               they point OUTSIDE our app to other websites. <Link> is for jumping
@@ -122,13 +122,13 @@ export default function Footer() {
 
         {/* Directory links */}
         <div className="space-y-6">
-          <h4 className="font-bold text-white uppercase tracking-wider text-xs">Avento Directory</h4>
+          <h4 className="font-bold text-white uppercase tracking-wider text-xs">Go to</h4>
           <ul className="space-y-3 text-xs text-zinc-500">
             <li>
               <Link href="/" className="hover:text-white transition-colors duration-300">Home Dashboard</Link>
             </li>
             <li>
-              <Link href="/vehicles" className="hover:text-white transition-colors duration-300">Fleet Vehicles</Link>
+              <Link href="/vehicles" className="hover:text-white transition-colors duration-300">Vehicles</Link>
             </li>
             <li>
               <Link href="/about" className="hover:text-white transition-colors duration-300">About The Brand</Link>
@@ -144,10 +144,10 @@ export default function Footer() {
           <h4 className="font-bold text-white uppercase tracking-wider text-xs">Our Categories</h4>
           <ul className="space-y-3 text-xs text-zinc-500">
             <li>
-              <Link href="/vehicles?type=car" className="hover:text-white transition-colors duration-300">Elite Luxury Cars</Link>
+              <Link href="/vehicles?type=car" className="hover:text-white transition-colors duration-300">Luxury Cars</Link>
             </li>
             <li>
-              <Link href="/vehicles?type=bike" className="hover:text-white transition-colors duration-300">Cruiser & Super-Bikes</Link>
+              <Link href="/vehicles?type=bike" className="hover:text-white transition-colors duration-300">Bikes</Link>
             </li>
             <li>
               <Link href="/vehicles?type=suv" className="hover:text-white transition-colors duration-300">Offroad & Luxury SUVs</Link>

@@ -28,7 +28,7 @@ import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import vehicleModel from "@/app/models/vehicle";
 import { createBooking } from "@/app/lib/create-booking";
-import { requireCustomer } from "@/app/lib/guards";
+import { requireUser } from "@/app/lib/guards";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
