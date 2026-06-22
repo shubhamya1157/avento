@@ -13,7 +13,11 @@
 //      the app — a server route can set that; a browser fetch cannot.
 //   2. Calling it server-side avoids browser cross-origin (CORS) problems.
 //
-// URL: GET /api/geocode?q=<address>  ->  [{ displayName, lat, lng }, ...]
+// TWO modes, picked by which query params are present:
+//   - FORWARD:  GET /api/geocode?q=<address>      -> [{ displayName, lat, lng }, ...]
+//   - REVERSE:  GET /api/geocode?lat=<n>&lng=<n>  -> [{ displayName, lat, lng }]
+// Reverse is used by "Use my location": the device gives us coordinates, and we
+// turn them back into a readable street address to show the rider.
 // (Protected: you must be logged in, same as the rest of the ride flow.)
 // ===========================================================================
 
@@ -34,8 +38,48 @@ export async function GET(req: NextRequest) {
     const { error } = await requireUser();
     if (error) return error;
 
+    const params = req.nextUrl.searchParams;
+    const latParam = params.get("lat");
+    const lngParam = params.get("lng");
+
+    // Headers every Nominatim call needs: it BANS requests with a missing or
+    // default User-Agent, so we identify our app clearly as their policy requires.
+    const nominatimHeaders = {
+      "User-Agent": "Avento/1.0 (ride-hailing demo; support@avento.com)",
+      "Accept-Language": "en",
+    };
+
+    // ----- REVERSE mode: coordinates -> one readable address. -----
+    if (latParam !== null && lngParam !== null) {
+      const lat = Number(latParam);
+      const lng = Number(lngParam);
+      // Guard against junk/out-of-range coords before calling the service.
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        return apiError("Invalid coordinates", 400);
+      }
+
+      const reverseUrl =
+        "https://nominatim.openstreetmap.org/reverse" +
+        `?format=json&lat=${lat}&lon=${lng}`;
+      const res = await fetch(reverseUrl, { headers: nominatimHeaders, next: { revalidate: 60 } });
+      if (!res.ok) {
+        return apiError("Address lookup is temporarily unavailable", 502);
+      }
+      const data = (await res.json()) as Partial<NominatimResult>;
+      // Reverse returns a single object. If it has no name, fall back to the
+      // coordinates themselves so the caller still gets a usable label.
+      return NextResponse.json([
+        {
+          displayName: data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          lat,
+          lng,
+        },
+      ]);
+    }
+
+    // ----- FORWARD mode: typed text -> up to 5 matches. -----
     // Read the ?q=... search text from the URL and tidy it up.
-    const q = req.nextUrl.searchParams.get("q")?.trim();
+    const q = params.get("q")?.trim();
     if (!q || q.length < 3) {
       // Too short to search usefully — return an empty list rather than an error
       // so the UI can simply show "keep typing".
@@ -49,12 +93,7 @@ export async function GET(req: NextRequest) {
       `?format=json&limit=5&addressdetails=0&q=${encodeURIComponent(q)}`;
 
     const res = await fetch(url, {
-      headers: {
-        // Nominatim BANS requests with a missing or default User-Agent, so we
-        // identify our app clearly as their policy requires.
-        "User-Agent": "Avento/1.0 (ride-hailing demo; support@avento.com)",
-        "Accept-Language": "en",
-      },
+      headers: nominatimHeaders,
       // Cache identical lookups briefly to be kind to the free service.
       next: { revalidate: 60 },
     });

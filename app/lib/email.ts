@@ -135,3 +135,48 @@ export async function sendOTPEmail(email: string, otp: string) {
     throw new Error("Failed to send OTP email");
   }
 }
+
+// ---------------------------------------------------------------------------
+// sendContactNotification: email the team a copy of a contact-form message.
+//
+// This is BEST-EFFORT and must NEVER break the contact API: the message is
+// already saved in the database (the source of truth), so this is just a
+// convenience ping. If email isn't configured (no EMAIL_USER) or sending fails,
+// we log and return false rather than throwing — the caller ignores the result.
+//
+// The note goes to CONTACT_EMAIL if set, otherwise the mailbox we send from
+// (EMAIL_USER). `replyTo` is the visitor's address, so hitting "Reply" in the
+// inbox writes straight back to them.
+// ---------------------------------------------------------------------------
+export async function sendContactNotification(msg: {
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}): Promise<boolean> {
+  // No mailbox configured -> nothing to send from. Quietly skip.
+  if (!process.env.EMAIL_USER) return false;
+
+  const to = process.env.CONTACT_EMAIL || process.env.EMAIL_USER;
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      replyTo: msg.email, // "Reply" goes to the visitor, not our own mailbox
+      subject: `Avento contact — ${msg.subject}`,
+      text:
+        `New message from the Avento contact form:\n\n` +
+        `Name:    ${msg.name}\n` +
+        `Email:   ${msg.email}\n` +
+        `Phone:   ${msg.phone || "—"}\n` +
+        `Subject: ${msg.subject}\n\n` +
+        `${msg.message}\n`,
+    });
+    return true;
+  } catch (error) {
+    // Non-fatal: the message is safely in the DB regardless.
+    console.error("Contact notification email failed:", error);
+    return false;
+  }
+}

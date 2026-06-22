@@ -76,6 +76,17 @@ export interface BookingType extends Document {
         | "ongoing"
         | "completed";
 
+    // --- Renter details (rental KYC, collected before a request is sent) ---
+    // A professional rental needs to know WHO is driving and that they hold a
+    // licence, so the booking form collects these and stores them here for the
+    // owner/admin to review before they accept. (Rides don't use this.)
+    renter?: {
+        fullName: string;
+        phone: string;
+        licenseNumber: string;  // driving licence number
+        address?: string;       // optional
+    };
+
     // --- Request / accept-reject lifecycle (added for the request loop) ---
     // Who made the accept/reject call (the vehicle's partner-owner, or an admin),
     // when they made it, and an optional note (mainly a reason on rejection).
@@ -163,6 +174,18 @@ const bookingSchema = new mongoose.Schema<BookingType>(
             // status explicitly keeps the old instant-confirm behaviour. The
             // request loop passes status:"requested" in on purpose.
             default: "confirmed",
+        },
+
+        // --- Renter details (rental KYC; see the interface above). `_id: false`
+        //     keeps this a plain embedded object, like pickup/drop. ---
+        renter: {
+            type: {
+                fullName: String,
+                phone: String,
+                licenseNumber: String,
+                address: String,
+            },
+            _id: false,
         },
 
         // --- Request / accept-reject lifecycle (see the interface above) ---

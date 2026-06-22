@@ -67,6 +67,8 @@ export default function ContactPage() {
   // Two simple true/false memories. useState(false) means "start out false".
   const [isSubmitting, setIsSubmitting] = useState(false); // true while "sending"
   const [submitted, setSubmitted] = useState(false);       // true once sent
+  // If the send fails, we remember the reason here to show under the button.
+  const [sendError, setSendError] = useState<string | null>(null);
   // Which FAQ is open. The "<number | null>" is TypeScript saying this value is
   // either a number (a position/index) OR null (nothing open). It starts at 0,
   // so the first question is open by default.
@@ -98,25 +100,33 @@ export default function ContactPage() {
   ];
 
   // Handle the form submission. This runs when the visitor presses "Send".
-  // Right now it FAKES a server call: it shows the spinner, waits 1.5 seconds,
-  // then switches to the success screen.
+  // It POSTs the form to /api/contact, which saves the message (and best-effort
+  // emails the team). On success we show the thank-you screen; on failure we
+  // keep the form filled in and show the reason so the visitor can retry.
   //
-  // "async" marks a function that does slow work (like waiting or talking to a
-  // server) without freezing the page. Inside an async function, "await" means
-  // "pause right here until this finishes, then continue". A "Promise" is a
-  // stand-in for a result that isn't ready yet — like a pizza order ticket you
-  // hold while the pizza cooks. Here, new Promise + setTimeout makes a promise
-  // that finishes after 1500 milliseconds (1.5 seconds), so "await" simply
-  // pauses for 1.5s.
+  // "async" marks a function that does slow work (like talking to a server)
+  // without freezing the page. Inside it, "await" means "pause here until this
+  // finishes, then continue".
   //   - Input: e, the form's submit event (carries info about what happened).
   //   - Output: nothing returned; it just updates state to drive the screen.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); // stop the browser's default page reload on submit
     setIsSubmitting(true);   // flip to "sending..." (button shows a busy label)
-    // Simulate api submission (pretend we sent the message to a server).
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);  // done waiting
-    setSubmitted(true);      // show the thank-you screen
+    setSendError(null);      // clear any previous error
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formState),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Could not send your message");
+      setSubmitted(true);    // show the thank-you screen
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Could not send your message right now");
+    } finally {
+      setIsSubmitting(false); // done either way
+    }
   };
 
   return (
@@ -402,6 +412,11 @@ export default function ContactPage() {
                         </>
                       )}
                     </button>
+
+                    {/* If the send failed, explain why right under the button. */}
+                    {sendError && (
+                      <p className="text-center text-xs text-red-400">{sendError}</p>
+                    )}
                   </form>
                 </div>
               ) : (
@@ -424,6 +439,7 @@ export default function ContactPage() {
                   <button
                     onClick={() => {
                       setSubmitted(false);
+                      setSendError(null);
                       setFormState({
                         name: "",
                         email: "",

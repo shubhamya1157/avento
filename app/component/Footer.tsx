@@ -8,8 +8,7 @@
 //   - Social icons are drawn as inline <svg> shapes (hand-drawn paths).
 //   - `target="_blank"` opens links in a new tab; `rel="noopener noreferrer"`
 //     is a safety/privacy best-practice that goes with external new-tab links.
-//   - The newsletter form's onSubmit just calls preventDefault() — it stops the
-//     page reload but doesn't send anywhere yet (no backend wired up for it).
+//   - The newsletter form POSTs the email to /api/subscribe, which saves it.
 // ===========================================================================
 
 // 'use client' = this runs in the visitor's browser. (See Providers.tsx for the
@@ -18,8 +17,9 @@
 'use client';
 
 // "import" borrows tools made elsewhere.
+import { useState } from "react";            // React's "remember a value" hook
 import Link from "next/link";                 // Next.js's fast in-app link, for internal pages
-import { Mail, Phone, MapPin } from "lucide-react"; // ready-made icon shapes
+import { Mail, Phone, MapPin, Loader2, CheckCircle2 } from "lucide-react"; // ready-made icon shapes
 
 // A "component" is a reusable piece of screen written as a function returning
 // markup. This one is the whole page footer.
@@ -30,6 +30,35 @@ export default function Footer() {
   // Compute the current year so the copyright text updates itself every year
   // instead of being hard-coded.
   const currentYear = new Date().getFullYear();
+
+  // ---- Newsletter sign-up state ----
+  // `email` is what's typed in the box; `status` drives the button + feedback:
+  //   idle = ready, sending = request in flight, done = success, error = failed.
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [feedback, setFeedback] = useState("");
+
+  // Send the email to our backend. Runs when the visitor presses Subscribe.
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault(); // stop the browser's default page reload
+    setStatus("sending");
+    setFeedback("");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Could not subscribe");
+      setStatus("done");
+      setFeedback(data.message);
+      setEmail("");
+    } catch (err) {
+      setStatus("error");
+      setFeedback(err instanceof Error ? err.message : "Could not subscribe right now");
+    }
+  };
 
   return (
     <footer className="relative bg-zinc-950 border-t border-white/5 text-zinc-400 py-20 px-6 md:px-12 lg:px-24 overflow-hidden">
@@ -45,30 +74,39 @@ export default function Footer() {
           <p className="text-xs text-zinc-500 leading-relaxed">Get updates, special weekend offers, and new luxury release announcements.</p>
         </div>
         {/* A <form> groups inputs that get "submitted" together. onSubmit runs
-            when the user presses Subscribe. `e` is the event (the click itself);
-            e.preventDefault() cancels the browser's default action of reloading
-            the page, so nothing jumps. Right now it does nothing else — there's
-            no backend wired up to actually save the email yet. */}
-        <form onSubmit={(e) => e.preventDefault()} className="flex gap-3 w-full max-w-md">
-          <div className="relative flex-1">
-            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-            {/* <input> is a typed-in field. type="email" hints it expects an
-                email; placeholder is the faint hint text; `required` stops
-                submission if it's left empty. */}
-            <input
-              type="email"
-              placeholder="Enter your email address"
-              required
-              className="w-full rounded-xl border border-white/5 bg-white/5 py-3 pl-9 pr-4 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-all"
-            />
-          </div>
-          <button
-            type="submit"
-            className="flex h-[40px] px-6 items-center justify-center rounded-xl bg-white text-xs font-bold text-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-          >
-            Subscribe
-          </button>
-        </form>
+            our handleSubscribe, which POSTs the email to /api/subscribe. The
+            input is "controlled": its value comes from state and onChange writes
+            every keystroke back, so we have the text ready to send. */}
+        <div className="w-full max-w-md">
+          <form onSubmit={handleSubscribe} className="flex gap-3">
+            <div className="relative flex-1">
+              <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+                disabled={status === "sending"}
+                className="w-full rounded-xl border border-white/5 bg-white/5 py-3 pl-9 pr-4 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-all disabled:opacity-60"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={status === "sending"}
+              className="flex h-[40px] px-6 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-bold text-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:hover:scale-100"
+            >
+              {status === "sending" ? <Loader2 size={14} className="animate-spin" /> : "Subscribe"}
+            </button>
+          </form>
+          {/* A small line under the form confirming success or explaining a failure. */}
+          {feedback && (
+            <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${status === "error" ? "text-red-400" : "text-emerald-400"}`}>
+              {status === "done" && <CheckCircle2 size={12} />}
+              {feedback}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Main Grid */}

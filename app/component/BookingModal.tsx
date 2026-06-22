@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { X, Calendar, IndianRupee, Clock, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { X, Calendar, IndianRupee, Clock, AlertCircle, CheckCircle, Loader2, User, Phone, IdCard, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Vehicle } from "@/app/lib/types";
 import AuthModal from "./AuthModal";
@@ -84,6 +84,12 @@ function BookingForm({
   const defaults = getDefaultDates();
   const [startDate, setStartDate] = useState(defaults.startDate);
   const [endDate, setEndDate] = useState(defaults.endDate);
+  // Renter KYC details. The name is pre-filled from the logged-in account (the
+  // person can still edit it, e.g. if booking on someone else's behalf).
+  const [fullName, setFullName] = useState(session?.user?.name ?? "");
+  const [phone, setPhone] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Once the server saves the request we keep what it sent back (its id and the
@@ -150,15 +156,28 @@ function BookingForm({
       return;
     }
 
+    // Renter KYC is required — the owner needs to know who's driving + licence.
+    if (!fullName.trim() || !phone.trim() || !licenseNumber.trim()) {
+      setError("Please fill in your name, phone, and driving licence number.");
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     // We deliberately DON'T send a price — the server computes it from the dates
     // and the vehicle (see app/lib/rental-price.ts), so it can't be tampered with.
+    // The renter details ride along so the owner can review them before accepting.
     const requestDetails = {
       vehicleId: vehicle._id,
       startDate,
       endDate,
+      renter: {
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        licenseNumber: licenseNumber.trim(),
+        address: address.trim() || undefined,
+      },
     };
 
     try {
@@ -330,6 +349,78 @@ function BookingForm({
               min={startDate || minDate}
               required
               className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-xs text-white outline-none focus:border-white/30"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Renter details (KYC). A professional rental needs to know who's driving
+          and that they hold a licence, so we collect this before sending the
+          request. The owner/admin reviews it before accepting. */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Your details</span>
+          <span className="h-px flex-1 bg-white/5" />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Full name</label>
+          <div className="relative">
+            <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              placeholder="As printed on your licence"
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/30"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Phone</label>
+            <div className="relative">
+              <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                placeholder="e.g. +91 98765 43210"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-3 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/30"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Licence no.</label>
+            <div className="relative">
+              <IdCard size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={licenseNumber}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+                required
+                placeholder="Driving licence"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-3 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/30"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+            Address <span className="font-normal lowercase text-zinc-600">(optional)</span>
+          </label>
+          <div className="relative">
+            <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Where you live"
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-xs text-white placeholder-zinc-600 outline-none focus:border-white/30"
             />
           </div>
         </div>

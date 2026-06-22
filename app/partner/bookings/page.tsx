@@ -42,11 +42,18 @@ interface PartnerBooking {
   _id: string;
   vehicleId: { _id: string; brand: string; model: string; image: string; type: string } | null;
   userId: { _id: string; name: string; email: string } | null;
-  startDate: string;
-  endDate: string;
+  kind?: "rental" | "ride";   // absent on old records (treated as rental)
+  startDate?: string;          // rentals only
+  endDate?: string;            // rentals only
+  pickup?: { address: string; lat: number; lng: number }; // rides only
+  drop?: { address: string; lat: number; lng: number };   // rides only
+  distanceKm?: number;         // rides only
+  dispatchedAt?: string;       // set when an admin dispatched this ride to me
   totalAmount: number;
   status: PartnerStatus;
   decisionNote?: string; // the reason the partner gave when rejecting
+  // Renter KYC captured on the booking form (who's driving + their licence).
+  renter?: { fullName: string; phone: string; licenseNumber: string; address?: string };
   paid?: boolean;
   createdAt: string;
 }
@@ -57,7 +64,7 @@ function fmt(d: string) {
 }
 
 export default function PartnerBookingsPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   const [bookings, setBookings] = useState<PartnerBooking[]>([]);
   const [loadedForSession, setLoadedForSession] = useState(false);
@@ -218,9 +225,17 @@ export default function PartnerBookingsPage() {
 
                       <div className="w-full flex-1 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h3 className="text-lg font-bold">
-                            {b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Unknown Vehicle"}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-bold">
+                              {b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Unknown Vehicle"}
+                            </h3>
+                            {/* A ride an admin handed to this partner to drive. */}
+                            {b.dispatchedAt && (
+                              <span className="flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+                                <Navigation size={10} /> Dispatched to you
+                              </span>
+                            )}
+                          </div>
                           {b.status === "requested" ? (
                             <span className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
                               <Hourglass size={12} /> Awaiting your decision
@@ -253,14 +268,54 @@ export default function PartnerBookingsPage() {
                             )}
                           </div>
                           <div>
-                            <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Dates</span>
-                            <span className="font-semibold text-zinc-200">{fmt(b.startDate)} – {fmt(b.endDate)}</span>
+                            {/* A dispatched ride shows its route; a rental shows its date range. */}
+                            {b.kind === "ride" ? (
+                              <>
+                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Route</span>
+                                <span className="block truncate font-semibold text-zinc-200">
+                                  {b.pickup?.address ?? "—"} → {b.drop?.address ?? "—"}
+                                </span>
+                                <span className="block text-[11px] text-zinc-500">{b.distanceKm ?? 0} km · ride</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Dates</span>
+                                <span className="font-semibold text-zinc-200">
+                                  {b.startDate ? fmt(b.startDate) : "—"} – {b.endDate ? fmt(b.endDate) : "—"}
+                                </span>
+                              </>
+                            )}
                           </div>
                           <div>
                             <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Amount</span>
                             <span className="font-semibold text-zinc-200">₹{b.totalAmount}</span>
                           </div>
                         </div>
+
+                        {/* Renter KYC — shown so the owner knows who's driving and
+                            can check the licence BEFORE accepting the request. */}
+                        {b.renter && (
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-xs text-zinc-400 sm:grid-cols-3">
+                            <div>
+                              <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Renter</span>
+                              <span className="block font-semibold text-zinc-200">{b.renter.fullName}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Phone</span>
+                              <span className="block font-semibold text-zinc-200">{b.renter.phone}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Licence</span>
+                              <span className="block font-semibold text-zinc-200">{b.renter.licenseNumber}</span>
+                            </div>
+                            {b.renter.address && (
+                              <div className="col-span-2 sm:col-span-3">
+                                <span className="block text-[10px] uppercase tracking-wider text-zinc-500">Address</span>
+                                <span className="block font-semibold text-zinc-200">{b.renter.address}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="w-full shrink-0 md:w-44">

@@ -40,6 +40,9 @@ export async function GET() {
     const bookings = await bookingModel
       .find({})
       .populate({ path: "userId", model: userModel, select: "name email" })
+      // The driver an admin dispatched to a ride (if any) — filled in so the page
+      // can show "Driver: <name>" instead of a raw id.
+      .populate({ path: "driverId", model: userModel, select: "name email" })
       .sort({ createdAt: -1 })
       .lean();
 

@@ -74,6 +74,9 @@ function AddressField({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
+  // A short reason shown under the field if "Use my location" can't run, so the
+  // shortcut never just silently does nothing.
+  const [locError, setLocError] = useState<string | null>(null);
 
   // Debounced geocode: 500ms after the user stops typing, look the text up.
   // (Nominatim asks callers not to hammer it, so we wait and only search text of
@@ -107,21 +110,56 @@ function AddressField({
     };
   }, [query, point]);
 
-  // Use the device's GPS as the pickup (no reverse-geocode needed — the coords
-  // alone are enough for the map and the distance).
+  // Use the device's GPS as the pickup. We read the coordinates, then ask our
+  // server to REVERSE-geocode them into a readable street address (falling back
+  // to "My current location" if that lookup fails). Every failure path sets a
+  // visible message so the button never appears to do nothing.
   const useMyLocation = () => {
-    if (!navigator.geolocation) return;
+    setLocError(null);
+
+    // The browser only exposes GPS over a secure origin (HTTPS or localhost).
+    // Over a plain http:// LAN address it's blocked — the usual reason this
+    // "doesn't work" on a phone — so we explain that instead of failing silently.
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setLocError("Location needs a secure (https) connection. Type your pickup instead.");
+      return;
+    }
+    if (!("geolocation" in navigator)) {
+      setLocError("This device can't share its location. Type your pickup instead.");
+      return;
+    }
+
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        onSelect({
-          address: "My current location",
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Try to turn the coordinates into a human address. Coords alone already
+        // drive the map + distance, so a failed lookup is non-fatal.
+        let address = "My current location";
+        try {
+          const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data[0]?.displayName) address = data[0].displayName;
+          }
+        } catch {
+          /* keep the generic label */
+        }
+        onSelect({ address, lat, lng });
         setLocating(false);
       },
-      () => setLocating(false),
+      (err) => {
+        // Translate the browser's error code into plain advice.
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was blocked. Allow it, or type your pickup."
+            : err.code === err.TIMEOUT
+            ? "Getting your location took too long. Try again, or type it in."
+            : "Couldn't get your location. Type your pickup instead.";
+        setLocError(msg);
+        setLocating(false);
+      },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -168,6 +206,11 @@ function AddressField({
           />
           {loading && (
             <Loader2 size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-zinc-500" />
+          )}
+
+          {/* A "Use my location" problem, explained right under the box. */}
+          {locError && (
+            <p className="mt-1.5 text-[11px] text-amber-400/90">{locError}</p>
           )}
 
           {/* Suggestion dropdown */}

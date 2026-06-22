@@ -80,7 +80,25 @@ export async function POST(req: NextRequest) {
     // Read the booking details the browser sent (JSON -> object). Note we do
     // NOT read a price here — createBooking computes the amount itself from the
     // dates + the vehicle, so a tampered request can't set its own price.
-    const { vehicleId, startDate, endDate } = await req.json();
+    const { vehicleId, startDate, endDate, renter } = await req.json();
+
+    // Renter KYC is required for a rental request: a professional rental must
+    // know who's driving and that they hold a licence. We validate the three
+    // required fields here and trim them down to a clean object to store.
+    if (
+      !renter ||
+      typeof renter.fullName !== "string" || !renter.fullName.trim() ||
+      typeof renter.phone !== "string" || !renter.phone.trim() ||
+      typeof renter.licenseNumber !== "string" || !renter.licenseNumber.trim()
+    ) {
+      return apiError("Please provide the renter's name, phone, and driving licence number", 400);
+    }
+    const cleanRenter = {
+      fullName: renter.fullName.trim().slice(0, 120),
+      phone: renter.phone.trim().slice(0, 40),
+      licenseNumber: renter.licenseNumber.trim().slice(0, 60),
+      address: typeof renter.address === "string" ? renter.address.trim().slice(0, 300) : undefined,
+    };
 
     // Hand off to the shared helper, which validates everything and either
     // creates the REQUEST or returns a clear error + status code. `requested`
@@ -91,6 +109,7 @@ export async function POST(req: NextRequest) {
       startDate,
       endDate,
       requested: true,
+      renter: cleanRenter,
     });
 
     if (result.errorMessage) {

@@ -111,27 +111,6 @@ export interface Vehicle {
 }
 
 // ---------------------------------------------------------------------------
-// What the partner submission form sends to the server when listing a vehicle.
-// (It's the renter-facing vehicle details PLUS the owner's personal details.)
-// ---------------------------------------------------------------------------
-export interface PartnerVehicleInput {
-  brand: string;
-  model: string;
-  type: VehicleType;
-  image: string;              // cover photo (an uploaded URL)
-  images?: string[];          // extra gallery photos
-  pricePerDay: number;
-  description: string;
-  transmission: Transmission;
-  fuel: FuelType;
-  seats: number;
-  ownerName: string;          // the partner's own name
-  ownerPhone: string;         // the partner's contact phone
-  licensePlate: string;       // the vehicle's registration plate
-  location: string;           // where the vehicle is based
-}
-
-// ---------------------------------------------------------------------------
 // One partner application, as the ADMIN review console sees it: the applicant's
 // own details plus the vehicle they submitted, so the admin can vet both before
 // the video KYC call. Returned by GET /api/admin/partners.
@@ -173,6 +152,17 @@ export interface BookingVehicle {
 }
 
 // ---------------------------------------------------------------------------
+// The renter's details, collected on the booking form before a rental request
+// is sent (rental KYC). The owner/admin reviews these before accepting.
+// ---------------------------------------------------------------------------
+export interface Renter {
+  fullName: string;
+  phone: string;
+  licenseNumber: string; // driving licence number
+  address?: string;      // optional
+}
+
+// ---------------------------------------------------------------------------
 // A booking as the frontend sees it (e.g. a row on the /bookings page).
 // ---------------------------------------------------------------------------
 export interface Booking {
@@ -191,6 +181,7 @@ export interface Booking {
   fare?: number;       // computed ride price (same value as totalAmount)
   totalAmount: number; // amount charged (rental: whole period; ride: the fare)
   status: BookingStatus; // requested / accepted / rejected / confirmed / cancelled …
+  renter?: Renter;       // renter KYC captured at request time (rentals)
   // --- Request / accept-reject lifecycle ---
   decisionAt?: string;   // when the owner accepted/rejected (text date)
   decisionNote?: string; // optional reason, mainly shown on a rejection
@@ -213,12 +204,4 @@ export interface Review {
   rating: number;     // a whole number of stars, 1 to 5
   comment?: string;   // the written review (optional)
   createdAt: string;  // when it was written
-}
-
-// What GET /api/reviews returns: the list plus a quick summary the UI can show
-// (e.g. "4.5 ★ from 12 reviews") without re-computing it in the browser.
-export interface ReviewSummary {
-  reviews: Review[];
-  count: number;   // how many reviews there are
-  average: number; // mean rating rounded to 1 decimal (0 when there are none)
 }

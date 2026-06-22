@@ -42,6 +42,10 @@ interface CreateBookingInput {
   // check happens at accept time (see the accept handler in
   // app/api/bookings/[id]/route.ts), where "accepted" counts as taken.
   requested?: boolean;
+  // The renter's KYC details (who's driving + their licence), collected on the
+  // booking form. Stored on the booking so the owner/admin can review it before
+  // accepting. Optional here because rides and the paid path don't pass it.
+  renter?: { fullName: string; phone: string; licenseNumber: string; address?: string };
 }
 
 // The shape we hand back: exactly one of `booking` or the error pair is filled.
@@ -50,7 +54,7 @@ type CreateBookingResult =
   | { booking?: undefined; errorMessage: string; errorStatus: number };
 
 export async function createBooking(input: CreateBookingInput): Promise<CreateBookingResult> {
-  const { userId, vehicleId, startDate, endDate, payment, requested } = input;
+  const { userId, vehicleId, startDate, endDate, payment, requested, renter } = input;
 
   // All the core fields must be present.
   if (!vehicleId || !startDate || !endDate) {
@@ -133,6 +137,8 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
     endDate: end,
     totalAmount,
     status: requested ? "requested" : "confirmed",
+    // Store the renter's KYC details when they were supplied (rental requests).
+    renter,
     paid: Boolean(payment),
     paymentId: payment?.paymentId,
     orderId: payment?.orderId,

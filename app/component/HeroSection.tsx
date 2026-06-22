@@ -24,6 +24,7 @@
 'use client';
 
 // "import" borrows tools made elsewhere so we can use them here.
+import Image from "next/image";        // Next.js's optimized image component
 import Link from "next/link";          // Next.js's fast page-to-page link
 import { Car, Truck, Bike } from "lucide-react"; // icon set
 
@@ -35,14 +36,25 @@ export default function HeroSection() {
   // transparent film: photo at the back, dark tints over it, text at the front.
   return (
     <section className="relative min-h-screen overflow-hidden">
-      {/* Layer 1: the background photo. (The slow zoom/drift effect was removed.) */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        // style={{ ... }} sets CSS directly on this element. The DOUBLE braces
-        // look odd but are just two things: the outer { } means "JavaScript
-        // goes here", and the inner { } is the actual settings object. This one
-        // points the background at our image file in the public folder.
-        style={{ backgroundImage: "url('/heroImage.png')" }}
+      {/* Layer 1: the background photo, served through next/image instead of a
+          raw CSS background. Why: <Image> automatically resizes the 1.5MB source
+          down to the visitor's screen size AND converts it to a modern format
+          (WebP/AVIF), so phones download a small image and desktops a sharp one —
+          full-responsive and far lighter, with no layout shift.
+            - fill         = stretch to cover the parent (the section is relative)
+            - priority     = it's the first thing seen, so load it eagerly (no lazy
+                             wait) and let Next preload it for a fast first paint
+            - sizes="100vw"= the image always spans the full viewport width, which
+                             tells Next which resized version each device needs
+            - object-cover / object-center mirror the old bg-cover/bg-center crop */}
+      <Image
+        src="/heroImage.png"
+        alt=""
+        aria-hidden="true"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover object-center"
       />
 
       {/* Layers 2 & 3: dark overlays on top of the photo. They dim it so the

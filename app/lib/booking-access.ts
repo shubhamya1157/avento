@@ -10,6 +10,8 @@
 //   - the BOOKER     — the customer who made the booking (booking.userId)
 //   - the OWNER      — the partner who owns the booked vehicle (vehicle.ownerId);
 //                      house-fleet vehicles have no owner, so an admin stands in
+//   - the DRIVER     — a partner an admin DISPATCHED to run this ride
+//                      (booking.driverId); they need chat/trip access too
 //   - any ADMIN      — can join to mediate / provide support
 //
 // Returns either { booking, vehicle } on success, or { error } — a ready-to-
@@ -48,9 +50,11 @@ export async function requireBookingParty(
   const myId = String(session.user.id);
   const isBooker = String(booking.userId) === myId;
   const isOwner = vehicle?.ownerId ? String(vehicle.ownerId) === myId : false;
+  // A ride the admin dispatched to this user to drive (booking.driverId).
+  const isDriver = booking.driverId ? String(booking.driverId) === myId : false;
   const isAdmin = session.user.role === "admin" || isAdminEmail(session.user.email);
 
-  if (!isBooker && !isOwner && !isAdmin) {
+  if (!isBooker && !isOwner && !isDriver && !isAdmin) {
     return { booking: null, vehicle: null, error: apiError("You are not part of this booking", 403) };
   }
 
