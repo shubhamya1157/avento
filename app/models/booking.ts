@@ -84,7 +84,7 @@ export interface BookingType extends Document {
         fullName: string;
         phone: string;
         licenseNumber: string;  // driving licence number
-        address?: string;       // optional
+        address: string;        // renter's address
     };
 
     // --- Request / accept-reject lifecycle (added for the request loop) ---
@@ -108,6 +108,7 @@ export interface BookingType extends Document {
     paid?: boolean;
     paymentId?: string; // Razorpay payment id (e.g. "pay_XXXX")
     orderId?: string;   // Razorpay order id (e.g. "order_XXXX")
+    rideOtp?: string;   // 4-digit OTP generated for ride pickup verification
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +211,7 @@ const bookingSchema = new mongoose.Schema<BookingType>(
         },
         paymentId: { type: String },
         orderId: { type: String },
+        rideOtp: { type: String },
     },
     // Auto-add `createdAt` (used to show "Booked On") and `updatedAt`.
     { timestamps: true }

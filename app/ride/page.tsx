@@ -28,18 +28,16 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin, Navigation, LocateFixed, ArrowRight, ArrowLeft, Loader2,
-  Car, Zap, Users, IndianRupee, CheckCircle, AlertCircle, MessageSquare, X,
+  Car, Zap, Users, IndianRupee, CheckCircle, AlertCircle, X,
 } from "lucide-react";
 
 import Nav from "@/app/component/Nav";
 import Footer from "@/app/component/Footer";
 import AuthModal from "@/app/component/AuthModal";
 import RouteMap from "@/app/component/RouteMap";
-import BookingChat from "@/app/component/BookingChat";
 import type { Vehicle, GeoPoint } from "@/app/lib/types";
 import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
 import { haversineKm, estimateFare, BASE_FARE, PER_KM, MIN_FARE } from "@/app/lib/fare";
-import { razorpayEnabled, loadRazorpayScript } from "@/app/lib/razorpay-client";
 
 // What /api/geocode hands back for each suggestion.
 interface GeoResult {
@@ -255,12 +253,11 @@ export default function RidePage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>(STATIC_VEHICLES);
   const [selected, setSelected] = useState<Vehicle | null>(null);
 
-  const [paying, setPaying] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdRideId, setCreatedRideId] = useState<string | null>(null);
 
   const [showLogin, setShowLogin] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   // We only ever want to fetch the live fleet once; this ref guards that.
   const fetchedVehicles = useRef(false);
@@ -298,8 +295,13 @@ export default function RidePage() {
     [selected, distanceKm]
   );
 
-  // ---- Pay & book the ride (Razorpay path, or a direct demo booking). ----
-  const handlePay = async () => {
+  // ---- Send the ride REQUEST (no payment yet). ----
+  // Like a rental, a ride is request-first: we create it as "requested" and the
+  // vehicle's owner — or an admin for the house fleet — accepts or rejects it.
+  // The rider pays only AFTER acceptance, from the My Bookings page (the same
+  // accepted -> pay -> confirmed path rentals use). So this just POSTs the
+  // request; distance + fare are recomputed on the server, so we don't send them.
+  const handleRequest = async () => {
     if (!session) {
       setShowLogin(true);
       return;
@@ -309,86 +311,22 @@ export default function RidePage() {
     if (!selected || !pickup || !drop) return;
 
     setError(null);
-    setPaying(true);
-
-    // The ride details are the same however we pay. Distance + fare are
-    // recomputed on the server, so we don't send them.
-    const rideDetails = { vehicleId: selected._id, pickup, drop };
+    setSubmitting(true);
 
     try {
-      if (razorpayEnabled) {
-        // 1. Create the payment order on our server.
-        const orderRes = await fetch("/api/payment/order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ totalAmount: fare }),
-        });
-        const orderData = await orderRes.json();
-        if (!orderRes.ok) throw new Error(orderData.message || "Could not start payment");
-
-        // 2. Load Razorpay's checkout script.
-        const ready = await loadRazorpayScript();
-        if (!ready || !window.Razorpay) {
-          throw new Error("Could not load the payment gateway. Check your connection.");
-        }
-
-        // 3. Open the checkout. On success Razorpay calls our handler, which
-        //    verifies the payment AND creates the ride in one server step.
-        const razorpay = new window.Razorpay({
-          key: orderData.keyId,
-          amount: orderData.amount,
-          currency: orderData.currency,
-          order_id: orderData.orderId,
-          name: "Avento",
-          description: `Ride · ${selected.brand} ${selected.model}`,
-          image: selected.image,
-          prefill: { name: session.user?.name || "", email: session.user?.email || "" },
-          theme: { color: "#ffffff" },
-          handler: async (response: {
-            razorpay_order_id: string;
-            razorpay_payment_id: string;
-            razorpay_signature: string;
-          }) => {
-            try {
-              const verifyRes = await fetch("/api/payment/verify-ride", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...response, ...rideDetails }),
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok) throw new Error(verifyData.message || "Payment could not be verified");
-              setCreatedRideId(verifyData._id);
-              setStep("done");
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Payment verification failed.");
-            } finally {
-              setPaying(false);
-            }
-          },
-          modal: {
-            // If the rider closes the popup without paying, re-enable the button.
-            ondismiss: () => setPaying(false),
-          },
-        });
-        razorpay.open();
-        return; // the handler/ondismiss above finish the flow
-      }
-
-      // --- Demo path: no payment configured, just create the ride. ---
       const res = await fetch("/api/rides", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(rideDetails),
+        body: JSON.stringify({ vehicleId: selected._id, pickup, drop }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to book ride");
+      if (!res.ok) throw new Error(data.message || "Failed to send your ride request");
       setCreatedRideId(data._id);
       setStep("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
-      // For the Razorpay path we already manage `paying` inside the callbacks.
-      if (!razorpayEnabled) setPaying(false);
+      setSubmitting(false);
     }
   };
 
@@ -399,10 +337,9 @@ export default function RidePage() {
       <main className="min-h-screen bg-black px-6 pb-24 pt-32 text-white md:px-12 lg:px-24">
         <div className="mx-auto max-w-5xl">
           {/* ---- Heading + step indicator ---- */}
-          <div className="space-y-3 text-center md:text-left">
-            <span className="text-xs uppercase tracking-[0.5em] text-zinc-500">On-demand</span>
+          <div className="space-y-3 text-center">
             <h1 className="text-4xl font-black tracking-wide sm:text-5xl">GET A RIDE</h1>
-            <p className="max-w-lg text-sm leading-relaxed text-zinc-400">
+            <p className="mx-auto max-w-lg text-sm leading-relaxed text-zinc-400">
               Tell us where you&apos;re going, pick your ride, and we&apos;ll take it from there.
             </p>
           </div>
@@ -425,7 +362,7 @@ export default function RidePage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
-                className="mt-10 max-w-xl space-y-6 rounded-3xl border border-white/10 bg-zinc-950/50 p-6 md:p-8"
+                className="mx-auto mt-10 max-w-xl space-y-6 rounded-3xl border border-white/10 bg-zinc-950/50 p-6 md:p-8"
               >
                 <AddressField
                   label="Pickup"
@@ -622,6 +559,11 @@ export default function RidePage() {
                     {fare === MIN_FARE && (
                       <p className="text-[11px] text-zinc-500">A minimum fare of ₹{MIN_FARE} applies to short trips.</p>
                     )}
+                    {/* Payment comes AFTER the request is accepted — make that clear. */}
+                    <p className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-400">
+                      You won&apos;t be charged yet. Send the request — once the owner accepts, you&apos;ll
+                      pay ₹{fare} from My Bookings to lock in your ride.
+                    </p>
                   </div>
 
                   <div className="flex gap-3">
@@ -632,18 +574,16 @@ export default function RidePage() {
                       <ArrowLeft size={16} /> Back
                     </button>
                     <button
-                      onClick={handlePay}
-                      disabled={paying}
+                      onClick={handleRequest}
+                      disabled={submitting}
                       className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-sm font-bold text-black transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100"
                     >
-                      {paying ? (
+                      {submitting ? (
                         <Loader2 size={18} className="animate-spin" />
                       ) : !session ? (
-                        "Login to book"
-                      ) : razorpayEnabled ? (
-                        `Pay ₹${fare} & Book`
+                        "Login to request"
                       ) : (
-                        `Confirm ride · ₹${fare}`
+                        "Request this ride"
                       )}
                     </button>
                   </div>
@@ -667,30 +607,33 @@ export default function RidePage() {
                 >
                   <CheckCircle size={36} />
                 </motion.div>
-                <h3 className="mt-6 text-2xl font-black tracking-wider">RIDE CONFIRMED</h3>
+                <h3 className="mt-6 text-2xl font-black tracking-wider">REQUEST SENT</h3>
                 <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
-                  Your {selected?.brand} {selected?.model} is booked. Track it live or message your
-                  driver any time.
+                  Your {selected?.brand} {selected?.model} request has been sent. Once the owner
+                  (or our team) accepts it, you&apos;ll get a <span className="text-white">Pay now</span>{" "}
+                  option in My Bookings — pay to confirm, then track your driver and pickup/drop live.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                   <Link
-                    href={`/trip/${createdRideId}`}
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:scale-105"
-                  >
-                    <Navigation size={15} /> Track ride
-                  </Link>
-                  <button
-                    onClick={() => setChatOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    <MessageSquare size={15} /> Message driver
-                  </button>
-                  <Link
                     href="/bookings"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:scale-105"
                   >
                     My Bookings
                   </Link>
+                  <button
+                    onClick={() => {
+                      // Start a fresh request without a full page reload.
+                      setPickup(null);
+                      setDrop(null);
+                      setSelected(null);
+                      setCreatedRideId(null);
+                      setError(null);
+                      setStep("addresses");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Book another ride
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -698,17 +641,8 @@ export default function RidePage() {
         </div>
       </main>
 
-      {/* Login popup, shown if a logged-out visitor tries to pay. */}
+      {/* Login popup, shown if a logged-out visitor tries to request a ride. */}
       <AuthModal open={showLogin} onClose={() => setShowLogin(false)} initialMode="login" />
-
-      {/* Chat with the driver, opened from the success screen. */}
-      {chatOpen && createdRideId && (
-        <BookingChat
-          bookingId={createdRideId}
-          title={selected ? `${selected.brand} ${selected.model}` : "Your ride"}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
 
       <Footer />
     </>
@@ -725,7 +659,7 @@ function StepDots({ step }: { step: Step }) {
   const labels = ["Trip", "Ride", "Pay", "Done"];
 
   return (
-    <div className="mt-8 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
+    <div className="mt-8 flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
       {labels.map((label, i) => (
         <div key={label} className="flex items-center gap-2">
           <span

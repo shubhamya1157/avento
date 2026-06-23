@@ -12,10 +12,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, AlertCircle, XCircle, CheckCircle2, Check, MessageSquare, Video, Navigation } from "lucide-react";
+import { Loader2, AlertCircle, XCircle, CheckCircle2, Check, MessageSquare, Video, Navigation, Trash2 } from "lucide-react";
 import BookingChat from "@/app/component/BookingChat";
 import VideoCall from "@/app/component/VideoCall";
+import ConfirmDialog from "@/app/component/ConfirmDialog";
 import AdminPageHeader from "@/app/component/AdminPageHeader";
+import { useCascadeDelete, describeCounts } from "@/app/lib/use-cascade-delete";
 
 // The shape of a booking as /api/admin/bookings returns it. The vehicle and
 // user references are "populated" into small objects (or null if the linked
@@ -56,15 +58,22 @@ interface Driver {
 // (accepted/confirmed/ongoing) bookings are brightest, a request awaiting an
 // answer is a quiet outline, and a finished/cancelled/rejected one fades back.
 const STATUS_CLS: Record<AdminBooking["status"], string> = {
-  confirmed: "bg-white/10 text-white",
-  accepted: "bg-white/10 text-white",
+  confirmed: "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400",
+  accepted: "bg-blue-500/10 border border-blue-500/20 text-blue-400",
   ongoing: "bg-white/10 text-white",
-  requested: "border border-white/15 text-zinc-300",
+  requested: "border border-amber-500/20 bg-amber-500/10 text-amber-400",
   pending: "border border-white/15 text-zinc-300",
   completed: "bg-white/5 text-zinc-400",
-  rejected: "bg-white/5 text-zinc-500",
-  cancelled: "bg-white/5 text-zinc-500",
+  rejected: "bg-red-500/10 border border-red-500/20 text-red-400",
+  cancelled: "bg-red-500/10 border border-red-500/20 text-red-500",
 };
+
+// A booking is "live" once it's paid & confirmed (or under way / completed).
+// Chat, video and trip tracking only apply from this point — there's nothing to
+// coordinate on a request that's still awaiting a decision or the customer's
+// payment, so those actions stay hidden until then.
+const isLiveStatus = (s: AdminBooking["status"]) =>
+  s === "confirmed" || s === "ongoing" || s === "completed";
 
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
@@ -80,21 +89,40 @@ export default function AdminBookingsPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [picked, setPicked] = useState<Record<string, string>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent` polls (every 10s) skip the full-page spinner + error banner so the
+  // list refreshes invisibly; the first load and manual reloads show them.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetch("/api/admin/bookings");
       if (!res.ok) throw new Error("Failed to load bookings");
       setBookings(await res.json());
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load bookings");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load bookings");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // The Delete flow (preview counts -> confirm -> cascade delete -> drop the row).
+  const del = useCascadeDelete({
+    endpoint: (id) => `/api/admin/bookings/${id}`,
+    onDeleted: (id) => setBookings((prev) => prev.filter((b) => b._id !== id)),
+    onError: setError,
+  });
+
+  // Live auto-refresh: re-fetch every 10s, but hold off while an action is in
+  // flight or the delete dialog is open (so the list doesn't shift underfoot).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (actingId || del.pending || del.busy) return;
+      load({ silent: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [load, actingId, del.pending, del.busy]);
 
   // Load the dispatchable drivers (approved partners) once, on mount. A failure
   // here isn't fatal — the rest of the page still works, dispatch just won't list
@@ -288,34 +316,41 @@ export default function AdminBookingsPage() {
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() =>
-                          setChat({
-                            id: b._id,
-                            title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
-                          })
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                      >
-                        <MessageSquare size={13} /> Chat
-                      </button>
-                      <button
-                        onClick={() =>
-                          setCall({
-                            id: b._id,
-                            title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
-                          })
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                      >
-                        <Video size={13} /> Video
-                      </button>
-                      <Link
-                        href={`/trip/${b._id}`}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                      >
-                        <Navigation size={13} /> Trip
-                      </Link>
+                      {/* Chat / video / trip — only on a LIVE (paid & confirmed)
+                          booking. A request that's still awaiting a decision or
+                          payment has nothing to coordinate yet. */}
+                      {isLiveStatus(b.status) && (
+                        <>
+                          <button
+                            onClick={() =>
+                              setChat({
+                                id: b._id,
+                                title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                          >
+                            <MessageSquare size={13} /> Chat
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCall({
+                                id: b._id,
+                                title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                          >
+                            <Video size={13} /> Video
+                          </button>
+                          <Link
+                            href={`/trip/${b._id}`}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                          >
+                            <Navigation size={13} /> Trip
+                          </Link>
+                        </>
+                      )}
                       {/* House-fleet rental requests await the admin's answer.
                           Partner requests are answered by their owner, so we
                           only show Accept/Reject for source === "fleet". */}
@@ -324,30 +359,46 @@ export default function AdminBookingsPage() {
                           <button
                             onClick={() => decide(b._id, "accepted")}
                             disabled={actingId === b._id}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white text-black px-3 py-2 text-xs font-bold transition hover:bg-zinc-200 active:scale-95 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 active:scale-95 disabled:opacity-50"
                           >
                             {actingId === b._id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                            Accept
+                            Accept Request
                           </button>
                           <button
                             onClick={() => decide(b._id, "rejected")}
                             disabled={actingId === b._id}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-400 transition hover:bg-red-500/20 active:scale-95 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-400 transition hover:bg-red-500/20 active:scale-95 disabled:opacity-50"
                           >
-                            <XCircle size={13} /> Reject
+                            <XCircle size={13} /> Decline
                           </button>
                         </>
                       )}
-                      {b.status !== "cancelled" && b.status !== "completed" && b.status !== "rejected" && (
+                      {b.status !== "cancelled" && b.status !== "completed" && b.status !== "rejected" && b.status !== "requested" && (
                         <button
                           onClick={() => cancel(b._id)}
                           disabled={actingId === b._id}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-400 transition hover:bg-red-500/20 active:scale-95 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-400 transition hover:bg-red-500/20 active:scale-95 disabled:opacity-50"
                         >
                           {actingId === b._id ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                          Cancel
+                          Cancel Booking
                         </button>
                       )}
+
+                      {/* Hard delete — removes the booking + its chat for good
+                          (Cancel above only flips the status). Allowed on any row. */}
+                      <button
+                        onClick={() =>
+                          del.ask({
+                            id: b._id,
+                            label: b.vehicleId ? `the ${b.vehicleId.brand} ${b.vehicleId.model} booking` : "this booking",
+                            self: "bookings",
+                          })
+                        }
+                        disabled={actingId === b._id}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/40 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/15 active:scale-95 disabled:opacity-50"
+                      >
+                        <Trash2 size={13} /> Delete
+                      </button>
                     </div>
 
                     {/* DISPATCH (rides only, while still active): assign an approved
@@ -398,6 +449,19 @@ export default function AdminBookingsPage() {
       {call && (
         <VideoCall bookingId={call.id} title={call.title} onClose={() => setCall(null)} />
       )}
+
+      {/* The delete confirmation, listing exactly what the cascade will remove. */}
+      <ConfirmDialog
+        open={Boolean(del.pending)}
+        title="Delete booking?"
+        message={`This permanently removes ${del.pending?.label ?? "this booking"} and everything tied to it. This can't be undone.`}
+        details={describeCounts(del.counts, "bookings")}
+        confirmLabel="Delete"
+        destructive
+        loading={del.busy}
+        onConfirm={del.confirm}
+        onClose={del.cancel}
+      />
     </div>
   );
 }

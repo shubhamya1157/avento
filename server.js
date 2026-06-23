@@ -34,8 +34,41 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  // 1. A plain HTTP server whose every request is handled by Next.
-  const httpServer = createServer((req, res) => handle(req, res));
+  // 1. A plain HTTP server whose every request is handled by Next, unless it is
+  //    a WebSocket relay request from a serverless host.
+  const httpServer = createServer((req, res) => {
+    if (req.url === "/api/socket-broadcast" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        try {
+          const { room, event, payload, secret } = JSON.parse(body);
+          const expectedSecret = process.env.SOCKET_SHARED_SECRET;
+          if (!expectedSecret || secret !== expectedSecret) {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Unauthorized" }));
+            return;
+          }
+
+          if (room && event && payload) {
+            io.to(room).emit(event, payload);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: true }));
+          } else {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Missing required fields" }));
+          }
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Bad Request" }));
+        }
+      });
+      return;
+    }
+    handle(req, res);
+  });
 
   // 2. Attach Socket.io to that same HTTP server. CORS is permissive here for
   //    simplicity; in production you'd lock `origin` to your real domain.

@@ -83,21 +83,22 @@ export async function POST(req: NextRequest) {
     const { vehicleId, startDate, endDate, renter } = await req.json();
 
     // Renter KYC is required for a rental request: a professional rental must
-    // know who's driving and that they hold a licence. We validate the three
+    // know who's driving, that they hold a licence, and their address. We validate all
     // required fields here and trim them down to a clean object to store.
     if (
       !renter ||
       typeof renter.fullName !== "string" || !renter.fullName.trim() ||
       typeof renter.phone !== "string" || !renter.phone.trim() ||
-      typeof renter.licenseNumber !== "string" || !renter.licenseNumber.trim()
+      typeof renter.licenseNumber !== "string" || !renter.licenseNumber.trim() ||
+      typeof renter.address !== "string" || !renter.address.trim()
     ) {
-      return apiError("Please provide the renter's name, phone, and driving licence number", 400);
+      return apiError("Please provide the renter's name, phone, driving licence number, and address", 400);
     }
     const cleanRenter = {
       fullName: renter.fullName.trim().slice(0, 120),
       phone: renter.phone.trim().slice(0, 40),
       licenseNumber: renter.licenseNumber.trim().slice(0, 60),
-      address: typeof renter.address === "string" ? renter.address.trim().slice(0, 300) : undefined,
+      address: renter.address.trim().slice(0, 300),
     };
 
     // Hand off to the shared helper, which validates everything and either

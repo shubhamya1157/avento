@@ -10,9 +10,12 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from "react";
-import { Loader2, AlertCircle, Search, ShieldCheck, Handshake, User as UserIcon } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { Loader2, AlertCircle, Search, ShieldCheck, Handshake, User as UserIcon, Trash2 } from "lucide-react";
 import AdminPageHeader from "@/app/component/AdminPageHeader";
+import ConfirmDialog from "@/app/component/ConfirmDialog";
+import { useCascadeDelete, describeCounts } from "@/app/lib/use-cascade-delete";
 
 // The shape of a user as /api/admin/users returns it (password is never sent).
 interface AdminUser {
@@ -34,28 +37,45 @@ const ROLE_STYLES: Record<AdminUser["role"], { label: string; cls: string; icon:
 };
 
 export default function AdminUsersPage() {
+  const { data: session } = useSession(); // to spot the admin's OWN row
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(""); // the search box text
 
-  // Load every user once when the page opens.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/users");
-        if (!res.ok) throw new Error("Failed to load users");
-        const data = await res.json();
-        if (!cancelled) setUsers(data);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load users");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  // Load every user. `silent` polls skip the spinner + error banner so the list
+  // refreshes quietly in the background.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) throw new Error("Failed to load users");
+      setUsers(await res.json());
+      setError(null);
+    } catch (err) {
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load users");
+    } finally {
+      if (!opts?.silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // The Delete flow (preview counts -> confirm -> cascade delete -> drop the row).
+  const del = useCascadeDelete({
+    endpoint: (id) => `/api/admin/users/${id}`,
+    onDeleted: (id) => setUsers((prev) => prev.filter((u) => u._id !== id)),
+    onError: setError,
+  });
+
+  // Live auto-refresh every 10s, paused while the delete dialog/action is busy.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (del.pending || del.busy) return;
+      load({ silent: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [load, del.pending, del.busy]);
 
   // Filter by name or email as the admin types. useMemo avoids recomputing the
   // filtered list on every unrelated re-render.
@@ -119,6 +139,7 @@ export default function AdminUsersPage() {
                 <th className="px-5 py-3 font-semibold">Role</th>
                 <th className="px-5 py-3 font-semibold">Verified</th>
                 <th className="px-5 py-3 font-semibold">Joined</th>
+                <th className="px-5 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -144,6 +165,21 @@ export default function AdminUsersPage() {
                     <td className="px-5 py-4 text-zinc-400">
                       {new Date(u.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-5 py-4 text-right">
+                      {/* Delete is hidden for admins and for the admin's own row —
+                          the server enforces the same two rules, this just keeps
+                          the button from showing where it would be refused. */}
+                      {u.role !== "admin" && u._id !== session?.user?.id ? (
+                        <button
+                          onClick={() => del.ask({ id: u._id, label: `${u.name} (${u.email})`, self: "users" })}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/40 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/15 active:scale-95"
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      ) : (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -151,6 +187,19 @@ export default function AdminUsersPage() {
           </table>
         </div>
       )}
+
+      {/* The delete confirmation, listing what the cascade will remove. */}
+      <ConfirmDialog
+        open={Boolean(del.pending)}
+        title="Delete user?"
+        message={`This permanently removes ${del.pending?.label ?? "this account"} and everything tied to it. This can't be undone.`}
+        details={describeCounts(del.counts, "users")}
+        confirmLabel="Delete"
+        destructive
+        loading={del.busy}
+        onConfirm={del.confirm}
+        onClose={del.cancel}
+      />
     </div>
   );
 }

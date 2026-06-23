@@ -22,6 +22,7 @@ import bookingModel from "@/app/models/booking";
 import { requireUser } from "@/app/lib/guards";
 import { requireBookingParty } from "@/app/lib/booking-access";
 import { isAdminEmail } from "@/app/lib/roles";
+import { cascadeDeleteBooking } from "@/app/lib/cascade-delete";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -79,7 +80,7 @@ export async function PATCH(
     // into an object; we then pull out the `status` field (and an optional
     // `note`, used to tell the customer WHY a request was rejected).
     const { id } = await context.params;
-    const { status, note } = await req.json();
+    const { status, note, otp } = await req.json();
 
     // Only these transitions are allowed through this endpoint.
     if (!["accepted", "rejected", "confirmed", "cancelled", "ongoing", "completed"].includes(status)) {
@@ -98,17 +99,20 @@ export async function PATCH(
     const isBooker = String(booking.userId) === myId;
 
     if (status === "accepted" || status === "rejected") {
-      // --- The OWNER (or an admin) answers a rental request. ---
+      // --- The OWNER (or an admin) answers a rental request, OR the BOOKER accepts their own. ---
       // requireBookingParty confirms the viewer is tied to this booking and also
       // hands back the vehicle so we can tell owners apart from the booker.
       const access = await requireBookingParty(id, session);
       if (access.error) return access.error;
 
-      // The decision is the OWNER's (or an admin's) to make — never the booker's.
+      // Only the vehicle owner (partner) or an admin can approve/decline the request.
+      // The booker cannot accept or reject their own request.
       const isAdmin = session.user.role === "admin" || isAdminEmail(session.user.email);
       const isOwner = access.vehicle?.ownerId ? String(access.vehicle.ownerId) === myId : false;
-      if (isBooker || (!isOwner && !isAdmin)) {
-        return apiError("Only the vehicle owner can answer this request", 403);
+      
+      if (!isOwner && !isAdmin) {
+        const actionWord = status === "accepted" ? "approve" : "decline";
+        return apiError(`Only the vehicle owner or an admin can ${actionWord} this request`, 403);
       }
 
       // You can only decide a request that's still pending a decision.
@@ -116,9 +120,11 @@ export async function PATCH(
         return apiError("This request has already been answered", 400);
       }
 
-      if (status === "accepted") {
-        // Final availability check: make sure no OTHER booking has already
-        // claimed these dates (accepted/confirmed/ongoing all count as taken).
+      if (status === "accepted" && booking.kind !== "ride") {
+        // Final availability check (RENTALS ONLY): make sure no OTHER booking has
+        // already claimed these dates (accepted/confirmed/ongoing all count as
+        // taken). Rides have no date range and one vehicle can do many of them,
+        // so there's nothing to clash on — we skip this for kind:"ride".
         const clash = await bookingModel.findOne({
           _id: { $ne: booking._id },
           vehicleId: booking.vehicleId,
@@ -170,6 +176,28 @@ export async function PATCH(
       if (booking.status === "cancelled") {
         return apiError("This ride was cancelled", 400);
       }
+
+      if (status === "ongoing") {
+        // Only the driver/owner/admin can start the ride. Booker cannot self-start.
+        const isAdmin = session.user.role === "admin" || isAdminEmail(session.user.email);
+        const isOwner = access.vehicle?.ownerId ? String(access.vehicle.ownerId) === myId : false;
+        const isDriver = booking.driverId ? String(booking.driverId) === myId : false;
+
+        if (isBooker && !isOwner && !isDriver && !isAdmin) {
+          return apiError("Only the driver or owner can start the ride", 403);
+        }
+
+        // To start a ride, it must be confirmed (paid/ready)
+        if (booking.status !== "confirmed") {
+          return apiError("This ride cannot be started yet (it must be confirmed/paid)", 400);
+        }
+
+        // Verify OTP
+        if (!otp || String(otp).trim() !== String(booking.rideOtp).trim()) {
+          return apiError("Invalid OTP. Please check with the passenger.", 400);
+        }
+      }
+
       booking.status = status;
     }
 
@@ -180,5 +208,47 @@ export async function PATCH(
   } catch (error) {
     console.error("Update booking error:", error);
     return apiError(getErrorMessage(error, "Failed to update booking"), 500);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/bookings/[id] — permanently remove a booking (and its chat).
+//
+// This is how a customer WITHDRAWS a request for good: unlike PATCH "cancelled"
+// (which keeps a greyed-out record), this erases the booking and its messages
+// from the database so it disappears from My Bookings entirely. It cascades via
+// app/lib/cascade-delete.ts.
+//
+// Who may delete: the BOOKER (their own booking) or an ADMIN. Owners answer
+// requests via accept/reject; they don't delete a customer's booking here.
+// ---------------------------------------------------------------------------
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { session, error } = await requireUser();
+    if (error) return error;
+
+    const { id } = await context.params;
+
+    await connectDB();
+
+    const booking = await bookingModel.findById(id);
+    if (!booking) return apiError("Booking not found", 404);
+
+    // Only the person who made the booking (or an admin) may delete it.
+    const myId = String(session.user.id);
+    const isBooker = String(booking.userId) === myId;
+    const isAdmin = session.user.role === "admin" || isAdminEmail(session.user.email);
+    if (!isBooker && !isAdmin) {
+      return apiError("You can only delete your own booking", 403);
+    }
+
+    const deleted = await cascadeDeleteBooking(id, {});
+    return NextResponse.json({ deleted });
+  } catch (error) {
+    console.error("Delete booking error:", error);
+    return apiError(getErrorMessage(error, "Failed to delete booking"), 500);
   }
 }

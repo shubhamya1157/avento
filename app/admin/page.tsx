@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Loader2, Clock, CheckCircle2, Users, Handshake, CalendarCheck,
@@ -31,21 +31,27 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load the headline numbers once when the dashboard appears.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/stats");
-        if (!res.ok) throw new Error("Failed to load dashboard stats");
-        const data = await res.json();
-        if (!cancelled) setStats(data);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load stats");
-      }
-    })();
-    return () => { cancelled = true; };
+  // Load the headline numbers. `silent` refreshes don't surface load errors, so a
+  // brief network blip during a poll won't flash a banner over good numbers.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (!res.ok) throw new Error("Failed to load dashboard stats");
+      const data = await res.json();
+      setStats(data);
+      setError(null);
+    } catch (err) {
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load stats");
+    }
   }, []);
+
+  // First load on mount, then keep the numbers fresh with a quiet 10s poll so the
+  // dashboard reflects deletes / new bookings without a manual reload.
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => load({ silent: true }), 10000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   // The stat cards, described as data so we can render them in a loop. We keep
   // the palette monochrome on purpose — every icon sits in the same muted chip,

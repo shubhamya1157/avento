@@ -51,7 +51,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Model S Plaid",          // the model name
     type: "car",                     // "car", "bike" or "suv"
     image: "/vehicle-tesla.jpg",     // photo file inside the public/ folder
-    pricePerDay: 150,                // daily price (just the number)
+    pricePerDay: 25000,              // daily price in ₹ (just the number)
     description:                     // the marketing blurb shown on the card
       "Sleek all-electric premium sedan with exceptional range, 1020 horsepower, and autopilot capabilities.",
     transmission: "Automatic",       // "Automatic" or "Manual"
@@ -65,7 +65,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Panigale V4",
     type: "bike",
     image: "/vehicle-ducati.jpg",
-    pricePerDay: 120,
+    pricePerDay: 8000,
     description:
       "Superbike performance with state-of-the-art electronics, racing soul, and stunning Italian design.",
     transmission: "Manual",
@@ -78,7 +78,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "M8 Competition",
     type: "car",
     image: "/vehicle-bmw.jpg",
-    pricePerDay: 250,
+    pricePerDay: 28000,
     description:
       "V8 luxury performance coupe with outstanding handling, M xDrive precision, and executive elegance.",
     transmission: "Automatic",
@@ -91,7 +91,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Sport",
     type: "suv",
     image: "/vehicle-range-rover.jpg",
-    pricePerDay: 200,
+    pricePerDay: 24000,
     description:
       "Luxury SUV combining refined interior comfort, advanced off-road capabilities, and high cruising status.",
     transmission: "Automatic",
@@ -104,7 +104,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Fat Boy 114",
     type: "bike",
     image: "/vehicle-harley.jpg",
-    pricePerDay: 110,
+    pricePerDay: 6000,
     description:
       "Iconic cruiser motorcycle with massive presence, steamroller stance, and standard-setting torque.",
     transmission: "Manual",
@@ -117,7 +117,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Taycan Cross Turismo",
     type: "car",
     image: "/vehicle-porsche-taycan.jpg",
-    pricePerDay: 280,
+    pricePerDay: 32000,
     description:
       "All-electric sports wagon offering Porsche driving dynamics, higher ground clearance, and versatile cargo room.",
     transmission: "Automatic",
@@ -130,7 +130,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Wrangler Rubicon",
     type: "suv",
     image: "/vehicle-jeep.jpg",
-    pricePerDay: 140,
+    pricePerDay: 15000,
     description:
       "The ultimate open-air 4x4 machine engineered for extreme off-road adventures and rugged landscapes.",
     transmission: "Manual",
@@ -143,7 +143,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Aventador S",
     type: "car",
     image: "/vehicle-lamborghini.jpg",
-    pricePerDay: 450,
+    pricePerDay: 90000,
     description:
       "A naturally-aspirated V12 supercar with aggressive aerodynamics, scissor doors, and breathtaking presence on every road.",
     transmission: "Automatic",
@@ -156,7 +156,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "F8 Tributo",
     type: "car",
     image: "/vehicle-ferrari.jpg",
-    pricePerDay: 480,
+    pricePerDay: 95000,
     description:
       "A twin-turbo V8 masterpiece delivering razor-sharp handling, race-bred performance, and timeless Italian design.",
     transmission: "Automatic",
@@ -169,7 +169,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "720S",
     type: "car",
     image: "/vehicle-mclaren-720s.jpg",
-    pricePerDay: 460,
+    pricePerDay: 92000,
     description:
       "A carbon-fibre track weapon with dihedral doors, blistering acceleration, and supreme aerodynamic engineering.",
     transmission: "Automatic",
@@ -182,7 +182,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Wraith",
     type: "car",
     image: "/vehicle-rolls-royce.jpg",
-    pricePerDay: 520,
+    pricePerDay: 110000,
     description:
       "The pinnacle of grand touring luxury — handcrafted interiors, a whisper-quiet V12, and effortless prestige.",
     transmission: "Automatic",
@@ -197,7 +197,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Panamera Turbo",
     type: "car",
     image: "/vehicle-porsche-panamera.jpg",
-    pricePerDay: 320,
+    pricePerDay: 35000,
     description:
       "A four-door sports sedan blending genuine supercar speed with daily comfort and unmistakable Porsche poise.",
     transmission: "Automatic",
@@ -210,7 +210,7 @@ export const SEED_VEHICLES: SeedVehicle[] = [
     model: "Mustang Mach 1",
     type: "car",
     image: "/vehicle-mustang.jpg",
-    pricePerDay: 130,
+    pricePerDay: 18000,
     description:
       "An iconic American muscle car with a thunderous V8 soundtrack, retro styling, and raw, tire-shredding character.",
     transmission: "Manual",

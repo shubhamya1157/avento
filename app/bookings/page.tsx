@@ -88,6 +88,7 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadedForSession, setLoadedForSession] = useState(false); // first fetch done?
   const [cancellingId, setCancellingId] = useState<string | null>(null); // which booking is mid-cancel
+  const [deletingId, setDeletingId] = useState<string | null>(null); // which booking is mid-delete (withdraw/remove)
   const [completingId, setCompletingId] = useState<string | null>(null); // which ride is mid-complete
   const [payingId, setPayingId] = useState<string | null>(null); // which accepted booking is mid-payment
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +196,34 @@ export default function BookingsPage() {
       setError(err instanceof Error ? err.message : "Something went wrong while cancelling");
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  // Permanently DELETE a booking — this is what "Withdraw request" does, and also
+  // the "Remove" on a finished/declined/cancelled row. Unlike cancelling (which
+  // keeps a greyed-out record), this erases the booking + its chat for good, so
+  // the card disappears from the list. `mode` only changes the confirm wording.
+  //   - Input: the booking id, and whether it's a withdraw or a tidy-up remove.
+  //   - Output: none (deletes on the server, then drops the row from state).
+  const handleDeleteBooking = async (bookingId: string, mode: "withdraw" | "remove") => {
+    const message =
+      mode === "withdraw"
+        ? "Withdraw this request? It will be permanently deleted."
+        : "Remove this booking from your list? This can't be undone.";
+    if (!confirm(message)) return;
+
+    setDeletingId(bookingId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete booking");
+      // Drop it from the list immediately (no need to refetch).
+      setBookings((prev) => prev.filter((b) => b._id !== bookingId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong while deleting");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -474,8 +503,8 @@ export default function BookingsPage() {
                                   <Hourglass size={12} /> Waiting for approval
                                 </span>
                               ) : isAccepted ? (
-                                <span className="flex items-center gap-1.5 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-400">
-                                  <CheckCircle2 size={12} /> Accepted — pay now
+                                <span className="flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                                  <CheckCircle2 size={12} /> Approved — complete payment
                                 </span>
                               ) : isRejected ? (
                                 <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
@@ -595,10 +624,13 @@ export default function BookingsPage() {
                               </button>
                             )}
 
-                            {/* "Message" / "Video" — talk to the owner. Useful from
-                                the moment a request is sent right through the trip,
-                                so we show them unless it was declined or called off. */}
-                            {!isRejected && !isCancelled && (
+                            {/* "Message" / "Video" — talk to the owner. These open up
+                                only once the booking is LIVE (paid & confirmed), the
+                                same point "Track trip" appears. Before that the request
+                                is still being reviewed / awaiting payment, so we keep
+                                the experience clean and professional: no chat or call
+                                until there's actually a confirmed booking to discuss. */}
+                            {isLive && (
                               <>
                                 <button
                                   onClick={() =>
@@ -656,26 +688,57 @@ export default function BookingsPage() {
                               </button>
                             )}
 
-                            {/* Withdraw / cancel THIS booking. The booker may back
-                                out at any pre-completion stage (a pending request,
-                                an accepted-but-unpaid booking, or a confirmed one).
-                                Hidden once it's already declined, cancelled, or a
-                                ride has completed. The label reads "Withdraw" while
-                                it's still just a request, else "Cancel". */}
-                            {!isRejected && !isCancelled && !isCompleted && (
+                            {/* WITHDRAW (permanent) — while it's still just a
+                                request or an accepted-but-unpaid booking, no money
+                                has moved, so backing out simply DELETES it: the
+                                card disappears for good (see handleDeleteBooking). */}
+                            {(isRequested || isAccepted) && (
+                              <button
+                                onClick={() => handleDeleteBooking(booking._id, "withdraw")}
+                                disabled={deletingId === booking._id}
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-xs font-bold text-red-400 transition hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
+                              >
+                                {deletingId === booking._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={14} />
+                                )}
+                                Withdraw request
+                              </button>
+                            )}
+
+                            {/* CANCEL (soft) — once it's a live, paid booking we
+                                keep the record for history and just mark it
+                                cancelled rather than erasing it. */}
+                            {(booking.status === "confirmed" || booking.status === "ongoing") && (
                               <button
                                 onClick={() => handleCancelBooking(booking._id)}
                                 disabled={cancellingId === booking._id}
                                 className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-xs font-bold text-red-400 transition hover:bg-red-500/10 active:scale-95 disabled:opacity-50"
                               >
-                                {/* While cancelling this row, show a spinning
-                                    loader; otherwise show a trash-can icon. */}
                                 {cancellingId === booking._id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <XCircle size={14} />
+                                )}
+                                Cancel booking
+                              </button>
+                            )}
+
+                            {/* REMOVE (permanent) — a finished, declined, or
+                                cancelled card can be cleared from the list for good. */}
+                            {(isRejected || isCancelled || isCompleted) && (
+                              <button
+                                onClick={() => handleDeleteBooking(booking._id, "remove")}
+                                disabled={deletingId === booking._id}
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-300 transition hover:bg-white/10 active:scale-95 disabled:opacity-50"
+                              >
+                                {deletingId === booking._id ? (
                                   <Loader2 size={14} className="animate-spin" />
                                 ) : (
                                   <Trash2 size={14} />
                                 )}
-                                {isRequested ? "Withdraw request" : "Cancel booking"}
+                                Remove
                               </button>
                             )}
                           </div>

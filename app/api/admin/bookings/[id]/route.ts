@@ -25,6 +25,7 @@ import { requireAdmin } from "@/app/lib/guards";
 import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import userModel from "@/app/models/user";
+import { cascadeDeleteBooking } from "@/app/lib/cascade-delete";
 import { apiError, getErrorMessage } from "@/app/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -89,10 +90,11 @@ export async function PATCH(
         return apiError("This request has already been answered", 400);
       }
 
-      if (status === "accepted") {
-        // Final availability check: make sure no OTHER booking has already
-        // claimed these dates (accepted/confirmed/ongoing all count as taken).
-        // Same guard the owner's accept path uses, so the fleet can't double-book.
+      if (status === "accepted" && booking.kind !== "ride") {
+        // Final availability check (RENTALS ONLY): make sure no OTHER booking has
+        // already claimed these dates (accepted/confirmed/ongoing all count as
+        // taken). Same guard the owner's accept path uses, so the fleet can't
+        // double-book. Rides have no dates, so we skip it for kind:"ride".
         const clash = await bookingModel.findOne({
           _id: { $ne: booking._id },
           vehicleId: booking.vehicleId,
@@ -124,5 +126,41 @@ export async function PATCH(
   } catch (error) {
     console.error("Admin update booking error:", error);
     return apiError(getErrorMessage(error, "Failed to update booking"), 500);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/bookings/[id] — permanently remove a booking + its chat.
+//
+// This is a HARD delete (unlike PATCH "cancelled", which only flips the status
+// and keeps the record). It cascades: the booking's chat messages go too (see
+// app/lib/cascade-delete.ts). ADMIN-ONLY.
+//
+// Pass ?dryRun=1 to PREVIEW — it returns the same count summary WITHOUT deleting
+// anything, so the admin UI can show "this will remove N messages" before the
+// admin commits.
+// ---------------------------------------------------------------------------
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error } = await requireAdmin();
+    if (error) return error;
+
+    const { id } = await context.params;
+    const dryRun = new URL(req.url).searchParams.get("dryRun") === "1";
+
+    await connectDB();
+
+    // 404 only on a REAL delete; a dry-run of a missing booking just reports zeros.
+    const exists = await bookingModel.countDocuments({ _id: id });
+    if (!exists && !dryRun) return apiError("Booking not found", 404);
+
+    const deleted = await cascadeDeleteBooking(id, { dryRun });
+    return NextResponse.json({ dryRun, deleted });
+  } catch (error) {
+    console.error("Admin delete booking error:", error);
+    return apiError(getErrorMessage(error, "Failed to delete booking"), 500);
   }
 }

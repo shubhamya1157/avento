@@ -159,7 +159,7 @@ export interface Renter {
   fullName: string;
   phone: string;
   licenseNumber: string; // driving licence number
-  address?: string;      // optional
+  address: string;       // renter's address
 }
 
 // ---------------------------------------------------------------------------

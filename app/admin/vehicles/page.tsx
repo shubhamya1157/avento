@@ -15,9 +15,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Vehicle } from "@/app/lib/types";
-import { Loader2, CheckCircle2, XCircle, AlertCircle, MapPin, Phone, User } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertCircle, MapPin, Phone, User, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminPageHeader from "@/app/component/AdminPageHeader";
+import ConfirmDialog from "@/app/component/ConfirmDialog";
+import { useCascadeDelete, describeCounts } from "@/app/lib/use-cascade-delete";
 
 // The filter tabs shown at the top of the queue.
 const FILTERS = ["pending", "approved", "rejected", "all"] as const;
@@ -36,22 +38,40 @@ export default function AdminVehiclesPage() {
 
   // Load the submissions for the active filter. Wrapped in useCallback so the
   // effect below can safely depend on it (it only changes when `filter` does).
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent` polls skip the spinner + error banner so the list refreshes quietly.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetch(`/api/admin/vehicles?status=${filter}`);
       if (!res.ok) throw new Error("Failed to load submissions");
       setVehicles(await res.json());
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load submissions");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load submissions");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [filter]);
 
   // Re-load whenever the filter (and therefore `load`) changes.
   useEffect(() => { load(); }, [load]);
+
+  // The Delete flow (preview counts -> confirm -> cascade delete -> drop the row).
+  const del = useCascadeDelete({
+    endpoint: (id) => `/api/admin/vehicles/${id}`,
+    onDeleted: (id) => setVehicles((prev) => prev.filter((v) => v._id !== id)),
+    onError: setError,
+  });
+
+  // Live auto-refresh every 10s, paused while an action runs or the delete dialog
+  // is open (so the queue doesn't reshuffle under the admin mid-task).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (actingId || del.pending || del.busy) return;
+      load({ silent: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [load, actingId, del.pending, del.busy]);
 
   // Approve or reject one vehicle, then reload the list so it moves out of the
   // current tab. For a rejection we send along the typed note (if any).
@@ -189,6 +209,9 @@ export default function AdminVehiclesPage() {
                               {actingId === v._id ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
                               Reject
                             </button>
+                            {/* Reject (above) keeps the record; Delete removes it
+                                and its bookings/reviews for good. */}
+                            <DeleteButton onClick={() => del.ask({ id: v._id, label: `the ${v.brand} ${v.model}`, self: "vehicles" })} disabled={actingId === v._id} />
                           </div>
                         </div>
                       ) : (
@@ -197,6 +220,11 @@ export default function AdminVehiclesPage() {
                             {v.status}
                           </span>
                           {v.adminNote && <span className="text-zinc-400">— {v.adminNote}</span>}
+                          <DeleteButton
+                            className="ml-auto"
+                            onClick={() => del.ask({ id: v._id, label: `the ${v.brand} ${v.model}`, self: "vehicles" })}
+                            disabled={actingId === v._id}
+                          />
                         </div>
                       )}
                     </motion.div>
@@ -205,6 +233,40 @@ export default function AdminVehiclesPage() {
               </AnimatePresence>
           </div>
         )}
+
+      {/* The delete confirmation, listing what the cascade will remove. */}
+      <ConfirmDialog
+        open={Boolean(del.pending)}
+        title="Delete vehicle?"
+        message={`This permanently removes ${del.pending?.label ?? "this vehicle"} and everything tied to it. This can't be undone.`}
+        details={describeCounts(del.counts, "vehicles")}
+        confirmLabel="Delete"
+        destructive
+        loading={del.busy}
+        onConfirm={del.confirm}
+        onClose={del.cancel}
+      />
     </div>
+  );
+}
+
+// A small reusable red "Delete" button used on each submission card.
+function DeleteButton({
+  onClick,
+  disabled,
+  className = "",
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 rounded-2xl border border-red-500/40 px-5 py-3 text-xs font-bold text-red-300 transition hover:bg-red-500/15 active:scale-95 disabled:opacity-50 ${className}`}
+    >
+      <Trash2 size={14} /> Delete
+    </button>
   );
 }

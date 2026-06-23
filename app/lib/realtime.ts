@@ -31,9 +31,24 @@ export function bookingRoom(bookingId: string): string {
 }
 
 // Broadcast an event to everyone currently in a booking's room. Safe to call
-// even when the socket server isn't running — it just does nothing then.
+// even when the socket server isn't running — it will try to relay the event via
+// HTTP POST to an external Socket.io server if configured.
 export function emitToBooking(bookingId: string, event: string, payload: unknown): void {
   const io = getIO();
-  if (!io) return;
-  io.to(bookingRoom(bookingId)).emit(event, payload);
+  const room = bookingRoom(bookingId);
+  if (io) {
+    io.to(room).emit(event, payload);
+  } else {
+    const url = process.env.SOCKET_SERVER_URL;
+    const secret = process.env.SOCKET_SHARED_SECRET;
+    if (url && secret) {
+      fetch(`${url}/api/socket-broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room, event, payload, secret }),
+      }).catch((err) => {
+        console.error("Failed to relay real-time event externally:", err);
+      });
+    }
+  }
 }

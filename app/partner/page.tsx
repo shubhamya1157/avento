@@ -126,6 +126,35 @@ export default function PartnerPage() {
     return () => { cancelled = true; };
   }, [status]);
 
+  // While an application is MID-FLIGHT (waiting on the admin to review the details
+  // or to run/pass the KYC), quietly poll the server every few seconds so the page
+  // advances on its OWN — "under review" → "Join KYC video call" → partner
+  // dashboard — the moment the admin acts, with no manual refresh. This is what
+  // makes the hand-off feel live: when the admin starts the KYC call, the
+  // applicant's "Join" button is already there waiting for them. We stop polling
+  // once they reach a settled state (approved / rejected / none).
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if (partnerStatus !== "pending_review" && partnerStatus !== "kyc_pending") return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/partner/application");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setPartnerStatus(data.partnerStatus ?? "none");
+        setKycNote(data.kycNote);
+        setMyVehicles(data.vehicles ?? []);
+      } catch {
+        /* a dropped poll is harmless — the next tick tries again */
+      }
+    };
+    const timer = setInterval(poll, 7000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [status, partnerStatus]);
+
   const setField = (key: keyof typeof EMPTY_FORM, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -295,7 +324,7 @@ export default function PartnerPage() {
       <button
         type="submit"
         disabled={submitting || uploading}
-        className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-black transition hover:scale-[1.01] active:scale-95 disabled:opacity-50 sm:w-auto sm:px-10"
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-black transition hover:scale-[1.01] active:scale-95 disabled:opacity-50 sm:mx-auto sm:w-auto sm:px-10"
       >
         {submitting ? <Loader2 size={16} className="animate-spin" /> : <Handshake size={16} />}
         {submitting ? "Submitting…" : cta}

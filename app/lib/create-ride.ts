@@ -3,18 +3,20 @@
 // create-booking.ts)
 // ===========================================================================
 //
-// Two routes need to create a ride booking:
-//   1. /api/rides (POST)              — the "demo" path when no payment is taken.
-//   2. /api/payment/verify-ride (POST)— after a real Razorpay payment succeeds.
+// A ride is REQUEST-FIRST, exactly like a rental: the rider sends a request (no
+// money up front), the vehicle's owner — or an admin for the house fleet —
+// accepts or rejects it, and only AFTER acceptance does the rider pay (from the
+// My Bookings page, the same accepted -> pay -> confirmed path rentals use). So
+// this helper just CREATES THE REQUEST (status "requested", unpaid); it's the
+// ride-hailing twin of create-booking.ts and is called from POST /api/rides.
 //
-// As with create-booking.ts, we keep the rules in one place and call it from
-// both. But a RIDE is not a rental: it has a pickup and drop instead of dates,
-// it is priced by distance, and a single vehicle can do many rides — so there is
-// NO date range, NO "start before end" rule, and NO double-booking check here.
+// A RIDE is not a rental: it has a pickup and drop instead of dates, it is priced
+// by distance, and a single vehicle can do many rides — so there is NO date
+// range, NO "start before end" rule, and NO double-booking check here.
 //
 // SECURITY NOTE: we never trust a price sent by the browser. We recompute the
-// distance and fare on the server (using app/lib/fare.ts) and charge THAT, so a
-// tampered request can't underpay.
+// distance and fare on the server (using app/lib/fare.ts) and store THAT as the
+// amount the rider will pay once accepted, so a tampered request can't underpay.
 //
 // Returns the same little result object shape as createBooking:
 //   success -> { booking };  failure -> { errorMessage, errorStatus }.
@@ -34,13 +36,13 @@ interface RidePoint {
   lng: number;
 }
 
-// What the caller passes in. `payment` is present only for real (paid) rides.
+// What the caller passes in. No payment here — a ride starts as an unpaid
+// request and is paid for later, after the owner/admin accepts it.
 interface CreateRideInput {
   userId: string;
   vehicleId: string;
   pickup: RidePoint;
   drop: RidePoint;
-  payment?: { paymentId: string; orderId: string };
 }
 
 // Exactly one of `booking` or the error pair is filled in.
@@ -58,7 +60,7 @@ function isValidPoint(p: RidePoint | undefined): p is RidePoint {
 }
 
 export async function createRide(input: CreateRideInput): Promise<CreateRideResult> {
-  const { userId, vehicleId, pickup, drop, payment } = input;
+  const { userId, vehicleId, pickup, drop } = input;
 
   // The core fields must be present and the coordinates must be real numbers.
   if (!vehicleId) {
@@ -93,8 +95,12 @@ export async function createRide(input: CreateRideInput): Promise<CreateRideResu
   const distanceKm = haversineKm(pickup, drop);
   const fare = estimateFare(distanceKm, vehicle.type as VehicleType);
 
-  // Save the ride. Note kind:"ride", no dates, and totalAmount === fare so the
-  // rest of the app (which reads totalAmount) shows the right number.
+  // Save the ride as a REQUEST. Note kind:"ride", no dates, and totalAmount ===
+  // fare so the rest of the app (which reads totalAmount) shows the right number
+  // — this is what the rider will pay once the owner/admin accepts. status starts
+  // "requested" and paid is false; no money has moved yet.
+  const rideOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
   const booking = await bookingModel.create({
     userId,
     vehicleId,
@@ -104,10 +110,9 @@ export async function createRide(input: CreateRideInput): Promise<CreateRideResu
     distanceKm,
     fare,
     totalAmount: fare,
-    status: "confirmed",
-    paid: Boolean(payment),
-    paymentId: payment?.paymentId,
-    orderId: payment?.orderId,
+    status: "requested",
+    paid: false,
+    rideOtp,
   });
 
   return { booking };

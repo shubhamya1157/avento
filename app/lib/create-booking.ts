@@ -19,6 +19,8 @@
 import connectDB from "@/app/lib/db";
 import bookingModel from "@/app/models/booking";
 import vehicleModel from "@/app/models/vehicle";
+import userModel from "@/app/models/user";
+import { isAdminEmail } from "@/app/lib/roles";
 import { STATIC_VEHICLES } from "@/app/lib/seed-vehicles";
 import { rentalDays } from "@/app/lib/rental-price";
 
@@ -42,10 +44,10 @@ interface CreateBookingInput {
   // check happens at accept time (see the accept handler in
   // app/api/bookings/[id]/route.ts), where "accepted" counts as taken.
   requested?: boolean;
-  // The renter's KYC details (who's driving + their licence), collected on the
+  // The renter's KYC details (who's driving + their licence + address), collected on the
   // booking form. Stored on the booking so the owner/admin can review it before
   // accepting. Optional here because rides and the paid path don't pass it.
-  renter?: { fullName: string; phone: string; licenseNumber: string; address?: string };
+  renter?: { fullName: string; phone: string; licenseNumber: string; address: string };
 }
 
 // The shape we hand back: exactly one of `booking` or the error pair is filled.
@@ -128,15 +130,31 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
 
   // All checks passed — save the booking, tied to this user.
   //   - A REQUEST starts at status "requested", unpaid, awaiting the owner.
+  //     However, if the vehicle is a fleet vehicle (owned by the system/admin)
+  //     or owned by a partner who is an admin, it is auto-accepted ("accepted")
+  //     so the customer can pay immediately.
   //   - Otherwise it's the legacy direct path: "confirmed", and paid:true if a
   //     real payment came with it (else a demo booking).
+  let status: "requested" | "accepted" | "confirmed" = "confirmed";
+  if (requested) {
+    const isFleet = vehicle.source === "fleet";
+    let isOwnerAdmin = false;
+    if (vehicle.ownerId) {
+      const owner = await userModel.findById(vehicle.ownerId).select("role email");
+      if (owner) {
+        isOwnerAdmin = owner.role === "admin" || isAdminEmail(owner.email);
+      }
+    }
+    status = (isFleet || isOwnerAdmin) ? "accepted" : "requested";
+  }
+
   const booking = await bookingModel.create({
     userId,
     vehicleId,
     startDate: start,
     endDate: end,
     totalAmount,
-    status: requested ? "requested" : "confirmed",
+    status,
     // Store the renter's KYC details when they were supplied (rental requests).
     renter,
     paid: Boolean(payment),

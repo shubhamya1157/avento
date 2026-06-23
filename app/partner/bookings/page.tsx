@@ -63,6 +63,15 @@ function fmt(d: string) {
   return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+// A booking is "live" once the customer has paid and it's confirmed (or the trip
+// is under way / already done). Chat, video and trip-tracking only make sense
+// from this point on — while a request is still being reviewed or is waiting on
+// the customer's payment, there's nothing to coordinate yet, so we keep those
+// actions hidden for a clean, professional flow.
+function isLiveStatus(status: PartnerStatus) {
+  return status === "confirmed" || status === "ongoing" || status === "completed";
+}
+
 export default function PartnerBookingsPage() {
   const { status } = useSession();
 
@@ -241,8 +250,8 @@ export default function PartnerBookingsPage() {
                               <Hourglass size={12} /> Awaiting your decision
                             </span>
                           ) : b.status === "accepted" ? (
-                            <span className="flex items-center gap-1.5 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-400">
-                              <Check size={12} /> Accepted — awaiting payment
+                            <span className="flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                              <Check size={12} /> Accepted — customer paying
                             </span>
                           ) : b.status === "rejected" ? (
                             <span className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-400">
@@ -342,34 +351,50 @@ export default function PartnerBookingsPage() {
                           </div>
                         )}
 
-                        <button
-                          onClick={() =>
-                            setChat({
-                              id: b._id,
-                              title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
-                            })
-                          }
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                        >
-                          <MessageSquare size={14} /> Message customer
-                        </button>
-                        <button
-                          onClick={() =>
-                            setCall({
-                              id: b._id,
-                              title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
-                            })
-                          }
-                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                        >
-                          <Video size={14} /> Video call
-                        </button>
-                        <Link
-                          href={`/trip/${b._id}`}
-                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
-                        >
-                          <Navigation size={14} /> Track trip
-                        </Link>
+                        {/* Once accepted, the ball is in the customer's court —
+                            tell the owner we're waiting on their payment rather
+                            than leaving an empty action column. */}
+                        {b.status === "accepted" && (
+                          <p className="rounded-2xl border border-blue-500/15 bg-blue-500/5 px-4 py-3 text-center text-[11px] font-medium text-blue-300">
+                            <span className="block font-semibold">✓ You accepted this request</span>
+                            <span className="mt-1 block text-[10px] text-blue-300/80">Waiting for customer to pay. Chat &amp; trip tools unlock once confirmed.</span>
+                          </p>
+                        )}
+
+                        {/* Chat / video / trip — only on a LIVE (paid & confirmed)
+                            booking. See isLiveStatus above. */}
+                        {isLiveStatus(b.status) && (
+                          <>
+                            <button
+                              onClick={() =>
+                                setChat({
+                                  id: b._id,
+                                  title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
+                                })
+                              }
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <MessageSquare size={14} /> Message customer
+                            </button>
+                            <button
+                              onClick={() =>
+                                setCall({
+                                  id: b._id,
+                                  title: b.vehicleId ? `${b.vehicleId.brand} ${b.vehicleId.model}` : "Booking",
+                                })
+                              }
+                              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <Video size={14} /> Video call
+                            </button>
+                            <Link
+                              href={`/trip/${b._id}`}
+                              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-zinc-200 transition hover:bg-white/10 active:scale-95"
+                            >
+                              <Navigation size={14} /> Track trip
+                            </Link>
+                          </>
+                        )}
                       </div>
                     </motion.div>
                   ))}

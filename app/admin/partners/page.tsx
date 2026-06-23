@@ -57,21 +57,33 @@ export default function AdminPartnersPage() {
   // The applicant we're currently on a KYC video call with (null = no call open).
   const [callWith, setCallWith] = useState<PartnerApplication | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `silent` polls skip the spinner + error banner so the queue refreshes quietly
+  // (so a new applicant or a status change shows up on its own within ~10s).
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const res = await fetch(`/api/admin/partners?status=${filter === "all" ? "all" : "active"}`);
       if (!res.ok) throw new Error("Failed to load applications");
       setApps(await res.json());
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load applications");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Failed to load applications");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live auto-refresh every 10s, paused while a decision is in flight or a KYC
+  // call is open (so the card the admin is acting on doesn't shift underneath).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (actingId || callWith) return;
+      load({ silent: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [load, actingId, callWith]);
 
   // Apply one admin decision to an application, then reload the list.
   const act = async (id: string, action: string) => {
